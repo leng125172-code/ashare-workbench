@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-ashare-workbench",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "A股投研：账户倾向行业（成交额前120/手动）、目录排名更新、资讯与K线、五类证据互核、四组/三档、建议配置与计划；Cindy/DSH独立存储，仅建议，无自动交易。",
   "license": "MIT",
   "type": "commonjs",
