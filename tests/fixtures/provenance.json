@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "purpose": "Offline regression fixtures only, not current quotes, trading recommendations, or fresh independent evidence.",
+  "sources": [
+    {
+      "provider": "Eastmoney public datacenter",
+      "url": "https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=%28SECUCODE%3D%22600519.SH%22%29&pageNumber=1&pageSize=3&sortTypes=-1&sortColumns=REPORT_DATE&source=HSF10&client=PC"
+    },
+    {
+      "provider": "CNInfo public financial reports",
+      "urls": [
+        "https://static.cninfo.com.cn/finalpage/2026-08-15/1225475860.PDF",
+        "https://static.cninfo.com.cn/finalpage/2026-10-31/1225649896.PDF",
+        "https://static.cninfo.com.cn/finalpage/2026-08-15/1225475343.PDF",
+        "https://static.cninfo.com.cn/finalpage/2026-10-24/1225620609.PDF"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "file": "financial-sh600519-eastmoney-20261105.json",
+      "sourceFileSha256": "6dec4782b6694014c30ae1612fa5c38436506b353a01ff90c81b77d9ac6a3961",
+      "fixtureSha256": "6dec4782b6694014c30ae1612fa5c38436506b353a01ff90c81b77d9ac6a3961",
+      "classification": "public-listed-company-facts-and-price-history; no account/holding/configuration data",
+      "transformations": []
+    },
+    {
+      "file": "history-public-market-20261105.json",
+      "sourceFileSha256": "c3ecd1a4d290a6005fefba08543213863539a873014a476cb063044b1a21b983",
+      "fixtureSha256": "4fb85e0ed375d7a5dd9d344c86fa33690fb7244e0c98ae4994aa9b81ca03c6ef",
+      "classification": "public-listed-company-facts-and-price-history; no account/holding/configuration data",
+      "transformations": [
+        "Removed source-workspace rawPath metadata; source PDFs are not bundled.",
+        "Replaced execution-specific reviewer IDs and review notes with explicit offline fixture metadata."
+      ]
+    }
+  ],
+  "notes": [
+    "Individual official PDF sourceSha256 fields remain unchanged in the history fixture.",
+    "These are frozen public-data fixtures; no network request runs during the tests.",
+    "Reviewer identities are synthetic labels for validating the contract and do not represent new review receipts.",
+    "The history fixture preserves existing crossCheck fields for contract regression; this migration did not independently re-download or re-verify market sources."
+  ]
+}

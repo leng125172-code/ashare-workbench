@@ -1,0 +1,1790 @@
+{
+  "schemaVersion": 3,
+  "minCindyVersion": "0.1.125",
+  "id": "ashare-workbench",
+  "name": "A股投研",
+  "description": "按成交额前120或账户倾向行业研究A股：四组行业、三档股票、五类证据互核、风险约束与计划、原生复查和微信报告。无自动交易。",
+  "whenToUse": "A股行业行情与投资优先级、行业内股票价值分档、K线与技术指标、已有持仓或投入资金的配仓调仓建议、投资计划、定时复查与微信投研报告。独立模拟盈亏账本、手续费与滑点核算、模拟成交记录与完整报价估值。 行业政策、公司公告与财报、估值口径、风险事件的来源覆盖和交叉核验。",
+  "version": "0.17.0",
+  "entry": "main.js",
+  "icon": "assets/icon.png",
+  "tools": [
+    {
+      "name": "get_state",
+      "description": "读取当前配置、研究进度、计划、报告目录与待对账动作。含独立模拟账本目录及估值。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "configure",
+      "description": "保存用户提供的实际持仓、可用资金和风险配置；不把建议当成成交。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "expectedRevision": {
+            "type": "number",
+            "description": "get_state返回的状态版本"
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "cash": {
+                "type": "number",
+                "description": "当前可用现金，人民币元；新增资金须由用户明确提供"
+              },
+              "holdings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "type": "string",
+                      "description": "证券代码"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "名称"
+                    },
+                    "quantity": {
+                      "type": "number",
+                      "description": "实际持有股数，非负整数"
+                    },
+                    "cost": {
+                      "type": "number",
+                      "description": "实际单位成本"
+                    }
+                  },
+                  "required": [
+                    "symbol",
+                    "quantity",
+                    "cost"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "maxEquityWeight": {
+                "type": "number",
+                "description": "用户设定的股票总仓位上限，0至1"
+              },
+              "maxStockWeight": {
+                "type": "number",
+                "description": "用户设定的单股上限，0至1"
+              },
+              "maxIndustryWeight": {
+                "type": "number",
+                "description": "用户设定的行业上限，0至1"
+              },
+              "riskPerStock": {
+                "type": "number",
+                "description": "单股止损损失预算占权益比例，0.001至0.1"
+              },
+              "horizonDays": {
+                "type": "number",
+                "description": "用户计划有效期，1至365天"
+              },
+              "reviewMinutes": {
+                "type": "number",
+                "description": "用户接受的最大复查间隔，15至10080分钟"
+              },
+              "trackingEnabled": {
+                "type": "boolean"
+              },
+              "allowAutoRevision": {
+                "type": "boolean"
+              },
+              "industryIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "限定行业代码，空数组表示全目录"
+                },
+                "description": "手动倾向行业的BK代码数组；manual不能为空，hot120保存为空但仅扫描成交额前120。"
+              },
+              "newsMaxAgeHours": {
+                "type": "number",
+                "description": "资讯有效时限1至168小时"
+              },
+              "quoteMaxAgeMinutes": {
+                "type": "number",
+                "description": "盘中报价有效时限1至120分钟"
+              },
+              "partnerTarget": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "bot",
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "从宿主目标列表实际选择的伙伴ID"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "dailyScanEnabled": {
+                "type": "boolean",
+                "description": "额外开盘日扫描开关；跟踪启用时默认开启"
+              },
+              "dailyScanTime": {
+                "type": "string",
+                "description": "上海时间HH:mm，默认15:15"
+              },
+              "sendKlineImages": {
+                "type": "boolean",
+                "description": "每轮推荐股票K线PNG发送待办，默认开启"
+              },
+              "industrySelectionMode": {
+                "type": "string",
+                "enum": [
+                  "hot120",
+                  "manual"
+                ],
+                "description": "倾向行业：hot120按成交额选头部120；manual只用industryIds非空集合。省略时已有ID迁移manual，否则hot120，不再默认全行业。"
+              }
+            },
+            "required": [
+              "cash",
+              "holdings",
+              "maxEquityWeight",
+              "maxStockWeight",
+              "maxIndustryWeight",
+              "riskPerStock",
+              "horizonDays",
+              "reviewMinutes"
+            ],
+            "additionalProperties": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "expectedRevision",
+          "config"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "begin_research",
+      "description": "新建或恢复研究。先读取账户倾向行业：默认成交额前120，或手动选择；保存范围、排序口径和时点，不再留空抓全行业。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "手动/伙伴/定时/目标触发原因"
+          },
+          "industryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "用户明确选择的行业ID；省略沿用配置"
+            },
+            "description": "可选的本轮显式手动行业ID；非空时覆盖账户倾向集合，空数组继续账户hot120/manual，不扩大到全目录。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "collect_batch",
+      "description": "继续采集一个持久批次的行业成分股、前复权日K与技术指标，分批断点保存。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "runId": {
+            "type": "string",
+            "description": "研究批次ID"
+          },
+          "batchSize": {
+            "type": "number",
+            "description": "每批1至8只，默认4"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "runId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_research",
+      "description": "读取行业与资讯；多行业完成采集/互核后先view:delegation取得只读子代理任务，主代理实际并行分派后统一写入。；view:storage只读查看字节数、唯一股票/归属数和安全迁移入口。 行业目录、资讯、资料包及派工列表均分页返回nextOffset。 增量协议2：delegation按行业返回token；revalidation分页返回最新行情与全部结果，供主代理最终复核。 view:industry_catalog在建批次之前只读行业目录/成交额排名，支持搜索和快照分页，此view不需runId。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "description": "研究批次ID"
+          },
+          "sectorId": {
+            "type": "string",
+            "description": "读取具体行业"
+          },
+          "offset": {
+            "type": "number",
+            "description": "从0开始的分页偏移"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "overview",
+              "news",
+              "information",
+              "delegation",
+              "storage",
+              "revalidation",
+              "industry_catalog"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "大列表每页条数，默认30；按nextOffset继续，不把一页当全部。"
+          },
+          "search": {
+            "type": "string"
+          },
+          "catalogToken": {
+            "type": "string",
+            "description": "上一页返回的目录快照token，分页保持同一排名，过期/变更须重读第一页。"
+          },
+          "refresh": {
+            "type": "boolean",
+            "description": "明确重新读取来源行情目录。"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_evidence",
+      "description": "提交分类原文或同指纹独立互核；旧协议清空判断，协议2仅相关行业需按新token重分析。runId/scanId择一。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "runId": {
+            "type": "string",
+            "description": "研究批次ID"
+          },
+          "news": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "最多800字符的摘要"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "公开HTTPS原文"
+                },
+                "source": {
+                  "type": "string",
+                  "description": "发布来源"
+                },
+                "publishedAt": {
+                  "type": "string",
+                  "description": "含时区的真实发布时间"
+                },
+                "keyword": {
+                  "type": "string",
+                  "description": "行业或股票名称"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "market",
+                    "policy",
+                    "announcement",
+                    "financial",
+                    "valuation",
+                    "risk"
+                  ]
+                },
+                "symbol": {
+                  "type": "string"
+                },
+                "sectorId": {
+                  "type": "string"
+                },
+                "contentLevel": {
+                  "type": "string",
+                  "enum": [
+                    "metadata",
+                    "full_text_reviewed"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "maxLength": 1600
+                },
+                "reportPeriod": {
+                  "type": "string",
+                  "description": "financial必填YYYY-MM-DD期末。"
+                },
+                "dataAsOf": {
+                  "type": "string",
+                  "description": "valuation必填含时区；与本轮报价时间对应。"
+                },
+                "validUntil": {
+                  "type": "string",
+                  "description": "已知失效时间，含时区。"
+                },
+                "metrics": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "unit": {
+                        "type": "string"
+                      },
+                      "basis": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value",
+                      "unit",
+                      "basis"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "searchScope": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "urls": {
+                      "type": "array",
+                      "maxItems": 10,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "limitations": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "urls",
+                    "limitations"
+                  ],
+                  "additionalProperties": false
+                },
+                "validityCheckedAt": {
+                  "type": "string",
+                  "description": "policy现行状态实际核验时间，含时区。"
+                },
+                "validityBasis": {
+                  "type": "string",
+                  "description": "policy核对现行版本、废止/修订和适用范围的依据。"
+                },
+                "regulatoryReceiptId": {
+                  "type": "string",
+                  "description": "可选，绑定本轮stock_detail(view:regulatory)已保存的同公司、同范围完整回执；不自动替代正文互核。"
+                },
+                "regulatoryRecordId": {
+                  "type": "string",
+                  "description": "可选，风险正文对应回执内具体docId时绑定编号与独立抓取的原文URL；接口列表本身不可当风险正文。"
+                }
+              },
+              "required": [
+                "title",
+                "url",
+                "publishedAt"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 30
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "scanId": {
+            "type": "string",
+            "description": "未定稿扫描ID；与runId互斥。"
+          },
+          "reviews": {
+            "type": "array",
+            "maxItems": 60,
+            "items": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "string"
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "reviewerId": {
+                  "type": "string",
+                  "description": "真实独立子代理/核验者标识，不编造。"
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "supported",
+                    "contradicted",
+                    "uncertain"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "description": "实际核验时间，含时区。"
+                },
+                "sourceUrl": {
+                  "type": "string"
+                },
+                "excerpt": {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                "notes": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              },
+              "required": [
+                "evidenceId",
+                "fingerprint",
+                "reviewerId",
+                "verdict",
+                "checkedAt",
+                "sourceUrl",
+                "excerpt",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "requestKey"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "record_judgment",
+      "description": "主代理串行保存行业分组/股票三档或证据不足终态；协议2须使用本行业当前token，真实workerId由主代理核对。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "runId": {
+            "type": "string",
+            "description": "研究批次ID"
+          },
+          "industry": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "本轮行业目录ID"
+              },
+              "group": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "主投行业",
+                  "二级投资行业",
+                  "三级投资行业",
+                  "不推荐行业",
+                  null
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "description": "结合资讯、行业和股票证据的分类理由"
+              },
+              "newsIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "本轮已有资讯编号"
+                }
+              },
+              "assessment": {
+                "type": "string",
+                "enum": [
+                  "classified",
+                  "insufficient"
+                ]
+              },
+              "missingReasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "group",
+              "reason",
+              "newsIds"
+            ],
+            "additionalProperties": false
+          },
+          "stockValues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "description": "本轮股票标准代码，如sh600519"
+                },
+                "tier": {
+                  "type": "string",
+                  "enum": [
+                    "一档",
+                    "二档",
+                    "三档"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "投资价值判断、技术面与资讯依据；不足时不提交该股票"
+                },
+                "newsIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "description": "本轮资讯编号"
+                  }
+                }
+              },
+              "required": [
+                "symbol",
+                "tier",
+                "reason",
+                "newsIds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "expectedContextToken": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "delegation本行业的contextToken。协议2不使用概览全局token，输入/有效状态变化时须真实重分析。"
+          },
+          "workerId": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 160,
+            "description": "实际执行该行业分析的子代理任务ID，由主代理保存；不能虚构或换名冒充独立核验。"
+          },
+          "readCoverage": {
+            "type": "object",
+            "properties": {
+              "stocksRead": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalStocks": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limitations": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "stocksRead",
+              "totalStocks",
+              "limitations"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "requestKey",
+          "runId",
+          "industry",
+          "stockValues"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finalize_research",
+      "description": "确定性风险校验后生成配仓/调仓建议、版本化计划、原生调度及微信报告待办。不会下单或自行发送IM。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "runId": {
+            "type": "string",
+            "description": "研究批次ID"
+          },
+          "summary": {
+            "type": "string",
+            "description": "本轮总结、维持或调整依据"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "description": "有AI价值分档且属于推荐行业的股票代码"
+                },
+                "weight": {
+                  "type": "number",
+                  "description": "建议总权益占比，0至1；确定性规则会进一步收缩"
+                },
+                "stop": {
+                  "type": "number",
+                  "description": "未复权现价口径的止损参考"
+                },
+                "target": {
+                  "type": "number",
+                  "description": "未复权现价口径的目标参考"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "配仓或调仓理由"
+                },
+                "sectorId": {
+                  "type": "string",
+                  "description": "该股票选定的主行业ID；涉及多个行业时必填。"
+                },
+                "entryCondition": {
+                  "type": "string",
+                  "maxLength": 1200,
+                  "description": "何时才考虑该建议；正权重必填，不等于已可下单。"
+                },
+                "waitCondition": {
+                  "type": "string",
+                  "maxLength": 1200,
+                  "description": "什么情况下等待、不新增仓位；正权重必填。"
+                },
+                "invalidationCondition": {
+                  "type": "string",
+                  "maxLength": 1200,
+                  "description": "原投资判断失效、须重新研究的条件；正权重必填。"
+                }
+              },
+              "required": [
+                "symbol",
+                "weight",
+                "stop",
+                "target",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "reviewMinutes": {
+            "type": "number",
+            "description": "15分钟至用户配置上限内的复查间隔"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "contextReview": {
+            "type": "object",
+            "properties": {
+              "expectedContextToken": {
+                "type": "string",
+                "description": "get_research(view:revalidation)当前全局复核token"
+              },
+              "reviewedSectorIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "实际读完并复核的全部行业ID，无重复无省略"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 12000,
+                "description": "最新行业行情/宏观对冻结行业分析和最终配置的影响与局限；实质变化行业须重新分析"
+              },
+              "newsIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "最近一次refresh_context取得且仍有效的资讯ID"
+              }
+            },
+            "required": [
+              "expectedContextToken",
+              "reviewedSectorIds",
+              "reason",
+              "newsIds"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "requestKey",
+          "runId",
+          "summary",
+          "allocations"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "stock_detail",
+      "description": "查询股票行情/K线/资料；view:information取得官方公告目录和财务参考，带runId/requestKey保存到候选研究；不自动视为读过正文。 view:refresh_analysis对已采集live候选重新取得真实日K及报价，须runId/requestKey；仅关联行业token变化，需实际重分析。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "股票代码"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "keyword": {
+            "type": "string",
+            "description": "股票名称用于资讯检索"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "selector": {
+            "type": "string",
+            "enum": [
+              "specified",
+              "recommended"
+            ]
+          },
+          "reportId": {
+            "type": "string",
+            "description": "可用报告计划快照选择当时推荐股票；省略用当前计划"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "target",
+              "stop",
+              "stale",
+              "missing"
+            ],
+            "description": "仅simulation使用的价格情景"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "information",
+              "source",
+              "execution",
+              "regulatory",
+              "refresh_analysis"
+            ],
+            "description": "省略为原K线查询；information只读资料包或在runId内归档。；regulatory读取上交所公开监管接口及同范围缓存回执，不等待浏览器。"
+          },
+          "runId": {
+            "type": "string",
+            "description": "仅view:information，保存到已采集候选股的本轮研究；同时传requestKey。"
+          },
+          "requestKey": {
+            "type": "string",
+            "description": "归档候选资料包时的稳定请求键。"
+          },
+          "includeInformation": {
+            "type": "boolean",
+            "description": "普通K线查询默认附带资料包；false仅查询K线和资讯。"
+          },
+          "url": {
+            "type": "string",
+            "description": "view:source的固定白名单HTTPS原文；不带runId/scanId只读取不归档。记录SHA256/格式/字节数；宿主文本备用注明哈希口径。"
+          },
+          "scanId": {
+            "type": "string",
+            "description": "view:source的未定稿扫描ID，与runId互斥。"
+          },
+          "order": {
+            "type": "object",
+            "description": "只读技术检查参数，不是委托；资金/权限/费用均须明确，未知保持未核验。",
+            "properties": {
+              "side": {
+                "type": "string",
+                "enum": [
+                  "buy",
+                  "sell"
+                ]
+              },
+              "quantity": {
+                "type": "integer"
+              },
+              "limitPrice": {
+                "type": "number"
+              },
+              "cash": {
+                "type": "number"
+              },
+              "positionQuantity": {
+                "type": "integer"
+              },
+              "sellableQuantity": {
+                "type": "integer"
+              },
+              "sellableAsOf": {
+                "type": "number"
+              },
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "main_sh",
+                    "main_sz",
+                    "star",
+                    "chinext",
+                    "bse"
+                  ]
+                }
+              },
+              "feeModel": {
+                "type": "object",
+                "properties": {
+                  "assumptionLabel": {
+                    "type": "string"
+                  },
+                  "commissionRate": {
+                    "type": "number"
+                  },
+                  "buyTaxRate": {
+                    "type": "number"
+                  },
+                  "sellTaxRate": {
+                    "type": "number"
+                  },
+                  "transferFeeRate": {
+                    "type": "number"
+                  },
+                  "minCommission": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "assumptionLabel",
+                  "commissionRate",
+                  "buyTaxRate",
+                  "sellTaxRate",
+                  "transferFeeRate",
+                  "minCommission"
+                ],
+                "additionalProperties": false
+              },
+              "maxDayAmountParticipation": {
+                "type": "number",
+                "description": "可选的纯测试参与率阈值，不是冲击成本预测。"
+              },
+              "permissionsAsOf": {
+                "type": "number"
+              },
+              "permissionsSource": {
+                "type": "string"
+              },
+              "holdingLots": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "quantity"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "regulatoryKind": {
+            "type": "string",
+            "enum": [
+              "measures",
+              "inquiries"
+            ],
+            "description": "上交所监管措施/监管问询；仅view:regulatory。"
+          },
+          "from": {
+            "type": "string",
+            "description": "监管检索起始日YYYY-MM-DD，与to构成不超过366日范围。"
+          },
+          "to": {
+            "type": "string",
+            "description": "监管检索截止日YYYY-MM-DD，不得晚于今天。"
+          },
+          "cache": {
+            "type": "string",
+            "enum": [
+              "prefer",
+              "refresh",
+              "only"
+            ],
+            "description": "同范围完整回执缓存：优先、强制刷新或仅核对缓存；TTL一小时，保留真实采集时间。"
+          },
+          "rawPage": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "按需读取某页原始JSON/JSONP，最多256KiB，不把整批原始响应回显。"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "plan_control",
+      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "planId": {
+            "type": "string",
+            "description": "计划ID"
+          },
+          "expectedRevision": {
+            "type": "number",
+            "description": "当前计划版本"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "pause",
+              "resume",
+              "complete",
+              "scan",
+              "get_scan",
+              "record_scan",
+              "paper_setup",
+              "paper_trade",
+              "paper_mark",
+              "paper_get",
+              "forward_setup",
+              "forward_observe",
+              "forward_get",
+              "performance_list",
+              "performance_advice",
+              "performance_setup",
+              "performance_link",
+              "performance_trade",
+              "performance_mark",
+              "performance_get",
+              "performance_export",
+              "performance_refresh",
+              "performance_match",
+              "performance_match_check",
+              "performance_history_check",
+              "storage_compact",
+              "storage_status",
+              "storage_migrate",
+              "storage_archive_completed",
+              "storage_cleanup_preview",
+              "storage_cleanup_execute",
+              "reset_history_preview",
+              "reset_history"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "原因"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "scanId": {
+            "type": "string"
+          },
+          "batchSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "daily": {
+            "type": "boolean",
+            "description": "默认true，按官方交易日守卫；手动盘后查看可false"
+          },
+          "asOf": {
+            "type": "number",
+            "description": "仅模拟测试允许覆盖扫描时钟的Unix毫秒"
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "target",
+              "stop",
+              "stale",
+              "missing"
+            ],
+            "description": "仅模拟测试"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "symbol": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "consistent",
+                    "adjust",
+                    "insufficient"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "newsIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "symbol",
+                "verdict",
+                "reason",
+                "newsIds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "paper": {
+            "type": "object",
+            "description": "仅用于paper_*；初始资金及费用是显式模拟假设，成交手动记录。",
+            "properties": {
+              "ledgerId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "label": {
+                "type": "string"
+              },
+              "initialCash": {
+                "type": "number"
+              },
+              "at": {
+                "type": "integer",
+                "description": "事件上海时间对应的Unix毫秒，按时间顺序。"
+              },
+              "dataKind": {
+                "type": "string",
+                "enum": [
+                  "synthetic",
+                  "observed_manual"
+                ]
+              },
+              "feeModel": {
+                "type": "object",
+                "properties": {
+                  "assumptionLabel": {
+                    "type": "string"
+                  },
+                  "commissionRate": {
+                    "type": "number"
+                  },
+                  "buyTaxRate": {
+                    "type": "number"
+                  },
+                  "sellTaxRate": {
+                    "type": "number"
+                  },
+                  "transferFeeRate": {
+                    "type": "number"
+                  },
+                  "minCommission": {
+                    "type": "number"
+                  },
+                  "slippageBps": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "assumptionLabel",
+                  "commissionRate",
+                  "buyTaxRate",
+                  "sellTaxRate",
+                  "transferFeeRate",
+                  "minCommission",
+                  "slippageBps"
+                ],
+                "additionalProperties": false
+              },
+              "side": {
+                "type": "string",
+                "enum": [
+                  "buy",
+                  "sell"
+                ]
+              },
+              "symbol": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "integer"
+              },
+              "quote": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "asOf": {
+                    "type": "integer"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "dataKind": {
+                    "type": "string",
+                    "enum": [
+                      "synthetic",
+                      "observed_manual"
+                    ]
+                  },
+                  "priceBasis": {
+                    "type": "string",
+                    "const": "unadjusted"
+                  },
+                  "symbol": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "price",
+                  "asOf",
+                  "source",
+                  "dataKind",
+                  "priceBasis",
+                  "symbol"
+                ],
+                "additionalProperties": false
+              },
+              "quotes": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "price": {
+                      "type": "number"
+                    },
+                    "asOf": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "dataKind": {
+                      "type": "string",
+                      "enum": [
+                        "synthetic",
+                        "observed_manual"
+                      ]
+                    },
+                    "priceBasis": {
+                      "type": "string",
+                      "const": "unadjusted"
+                    }
+                  },
+                  "required": [
+                    "symbol",
+                    "name",
+                    "price",
+                    "asOf",
+                    "source",
+                    "dataKind",
+                    "priceBasis"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "note": {
+                "type": "string"
+              },
+              "relatedReportId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ledgerId"
+            ],
+            "additionalProperties": false
+          },
+          "forward": {
+            "type": "object",
+            "properties": {
+              "journalId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "initialCash": {
+                "type": "number",
+                "const": 1000000
+              },
+              "symbols": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expectedVersion": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "journalId"
+            ],
+            "additionalProperties": false
+          },
+          "performance": {
+            "type": "object",
+            "properties": {
+              "reportId": {
+                "type": "string"
+              },
+              "ledgerId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_-]{3,80}$"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "parameters": {
+                "type": "object",
+                "description": "setup:initialCash,label,feeModel,benchmarkCostBps,benchmarkQuote；trade:at,symbol,side,quantity,quote,note；mark:at,quotes,benchmarkQuote。同paper规范；quote带symbol/name/price/asOf/source/dataKind/priceBasis。benchmarkQuote须sh000300及未复权/来源/15分钟内时间。"
+              }
+            },
+            "additionalProperties": false
+          },
+          "storage": {
+            "type": "object",
+            "properties": {
+              "expectedRevision": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "get_state返回的实际revision；写操作必须一致"
+              },
+              "cleanupToken": {
+                "type": "string",
+                "description": "清理预览返回的范围指纹"
+              },
+              "confirm": {
+                "type": "boolean",
+                "description": "仅用户/已授权任务确认清理范围后传true"
+              }
+            },
+            "additionalProperties": false
+          },
+          "previewToken": {
+            "type": "string",
+            "description": "reset_history_preview当前预览token。清历史前已由用户明确授权并完成库外备份/停止研究；本字段只防竞态，不代替授权。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "pending_actions",
+      "description": "读取待执行/结果未知的原生调度与微信报告动作；可取指定报告全文。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string",
+            "description": "报告ID，省略返回当前待办"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "claim_action",
+      "description": "在调用原生调度或微信工具前认领动作，避免两个执行者重复创建或发送。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "actionId": {
+            "type": "string",
+            "description": "待办动作ID"
+          },
+          "retryFailed": {
+            "type": "boolean",
+            "description": "仅确定失败且连接/原因已修复后显式重试；inflight或uncertain不能用它绕过对账。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "actionId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "record_receipt",
+      "description": "记录实际调度/微信工具回执。成功需真实消息ID或调度ID；结果未知保留uncertain，不能假报成功。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键；同一次操作重试保留原键和参数。"
+          },
+          "actionId": {
+            "type": "string",
+            "description": "待办动作ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed",
+              "uncertain"
+            ]
+          },
+          "externalId": {
+            "type": "string",
+            "description": "真实返回的调度ID或消息ID"
+          },
+          "message": {
+            "type": "string",
+            "description": "受理/错误说明，不含敏感信息"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "actionId",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "refresh_context",
+      "description": "刷新最新行业行情和宏观资讯。incremental:true显式启用协议2：同日冻结分析快照、按行业依赖增量重审；最终仍需最新市场统一复核。旧协议保持清空旧判断行为。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键，同次重试不变。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "incremental": {
+            "type": "boolean",
+            "description": "显式启用增量协议2；首次冻结当前行业快照，旧worker不能复用，未改变采集数据。"
+          },
+          "rebaseAnalysis": {
+            "type": "boolean",
+            "description": "同日重新冻结行业行情快照并重新分析全部行业；不能给跨日旧数据续期。"
+          },
+          "rebaseSectorIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "同日最终复核发现实质变化时，仅更新这些行业的行情快照及token，必须重新实际派工；其余行业保留。不能给跨日旧数据续期。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "runId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "record_failure",
+      "description": "记录本轮分析未完成并生成微信失败报告待办，保留实际持仓与原计划；可结束无法继续的批次。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string",
+            "description": "稳定请求键，同次重试不变。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          }
+        },
+        "required": [
+          "requestKey",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_report",
+      "description": "导出Markdown报告或指定/推荐股票K线PNG到当前任务目录；PNG可通过原生微信文件工具发送，返回相对路径，不能假报已发送。paper_markdown导出独立模拟账本。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "simulation"
+            ],
+            "description": "真实资料live或独立模拟资料simulation；省略为live，模拟资金/合成行情不会改写真实账户。"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "kline_png",
+              "paper_markdown",
+              "forward_markdown"
+            ]
+          },
+          "selector": {
+            "type": "string",
+            "enum": [
+              "specified",
+              "recommended"
+            ]
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "ledgerId": {
+            "type": "string",
+            "description": "paper_markdown所需模拟账本ID"
+          },
+          "journalId": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "node": {
+    "entry": "node/worker.cjs",
+    "protocol": "json-rpc-stdio",
+    "lifecycle": "resident"
+  },
+  "command": "投研",
+  "launch": "resident",
+  "library": true,
+  "mainView": {
+    "title": "A股投研",
+    "icon": "chart-column",
+    "html": "main-view.html"
+  },
+  "settingsHtml": "settings.html",
+  "agent": {
+    "tasks": true,
+    "targets": true
+  },
+  "network": {
+    "hosts": [
+      "*.eastmoney.com",
+      "*.gtimg.cn",
+      "zhibo.sina.com.cn",
+      "*.cninfo.com.cn",
+      "*.gov.cn",
+      "*.sse.com.cn",
+      "*.szse.cn",
+      "*.bse.cn"
+    ]
+  },
+  "routineEvents": {
+    "events": [
+      {
+        "type": "plan.target_reached",
+        "name": "投资计划目标触发",
+        "fields": [
+          "planId",
+          "revision",
+          "symbol",
+          "kind",
+          "price",
+          "sourceTime"
+        ]
+      },
+      {
+        "type": "plan.review_due",
+        "name": "投资计划复查到期",
+        "fields": [
+          "planId",
+          "revision",
+          "expired",
+          "nextReviewAt"
+        ]
+      }
+    ]
+  },
+  "manual": {
+    "items": [
+      {
+        "dir": "manual/workflow",
+        "name": "workflow",
+        "description": "从持仓输入到行业/股票分析、建议计划、原生调度与微信报告的完整流程及失败对账。"
+      }
+    ]
+  },
+  "releaseNotes": "相较已上架0.15.0：首步新增明确行业范围，账户倾向行业默认按本次行业成交额排名取前120，另支持名称/代码搜索及手动多选；手动空值不放大为全行业，缺失成交额或不完整目录阻止伪排名，报告保存来源、时间和范围。现有查询入口新增只读目录视图与可恢复历史重置，保留账户，按模式隔离并校验版本/预览token；不自动清空用户数据。保留0.16增量复核改进：同日行业独立token、未变化结果保留、局部行情/候选日K刷新、最终全市场复核，证据不足单列；跨日旧数据不续期，2小时上下文、1小时监管及正权重五类证据/报价/日K门禁保留。源码迁入公开GitHub项目维护，Cindy与dsh存储及授权独立，不自动交易。",
+  "mobile": {
+    "channels": [
+      "ashare-workbench"
+    ],
+    "mainView": "main-view.html",
+    "settings": "settings.html"
+  }
+}

@@ -1,0 +1,213 @@
+/* Financial controls and states consume the Host's semantic palette, never the OS theme. */
+:root{
+  --ui-line:var(--border-default,var(--border,#dce1e8));
+  --ui-field:var(--surface-elevated,var(--surface,#fff));
+  --ui-chip:var(--surface-chip,var(--panel-bg,#f4f6f9));
+  --ui-accent:var(--accent-cta-bg,var(--text-primary,#223246));
+  --ui-accent-ink:var(--accent-pure-cta-fg,var(--surface,#fff));
+  --ui-selected:var(--surface-elevated,var(--surface,#fff));
+  --ui-focus:var(--focus-ring,var(--text-primary,#223246));
+  --ui-error:var(--error-fg,var(--status-error,#b42335));
+  --ui-error-bg:var(--error-bg,var(--ui-chip));
+  --ui-error-line:var(--error-border,var(--ui-error));
+  --market-up:#bf3348;
+  --market-down:#147b5b;
+}
+@supports(color:color-mix(in srgb,black,white)){
+  :root{--ui-selected:color-mix(in srgb,var(--text-primary,#223246) 8%,var(--surface,#fff))}
+}
+@supports(color:light-dark(#000,#fff)){
+  :root{--market-up:light-dark(#bf3348,#ff8c98);--market-down:light-dark(#147b5b,#68d1ac)}
+}
+body{font-variant-numeric:tabular-nums;letter-spacing:.005em}
+button,input,select,textarea{min-height:46px;border-radius:10px;border-color:var(--ui-line);font-weight:450}
+button{touch-action:manipulation;transition:background var(--motion-fast,120ms) var(--motion-ease-out,ease-out),border-color var(--motion-fast,120ms) var(--motion-ease-out,ease-out)}
+button:active:not(:disabled){filter:brightness(.96)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button[aria-busy=true]{cursor:progress}
+button[aria-busy=true]::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:8px;vertical-align:-2px;animation:ui-spin var(--motion-spinner-cycle,900ms) linear infinite}
+.primary,.primary:hover{background:var(--ui-accent);color:var(--ui-accent-ink);border-color:var(--ui-accent);font-weight:650;opacity:1}
+.primary:hover:not(:disabled){filter:brightness(.94)}
+input,select,textarea{background:var(--ui-field);border:1px solid var(--ui-line);padding:12px 14px;font-size:14px;line-height:1.45;box-shadow:none}
+input:hover:not(:disabled),select:hover:not(:disabled){border-color:var(--text-tertiary,var(--ui-line))}
+input:focus,select:focus,textarea:focus{border-color:var(--ui-focus);outline:2px solid var(--ui-focus);outline-offset:2px}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline-color:var(--ui-focus)}
+input::placeholder,textarea::placeholder{color:var(--text-placeholder,var(--text-secondary,#6e7682));opacity:.66;font-weight:400}
+select{padding-right:34px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+input[type=number]{appearance:textfield;-moz-appearance:textfield}
+input::-webkit-inner-spin-button,input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+label{font-size:13px;font-weight:600;gap:8px;line-height:1.6}
+label small{font-size:12px;font-weight:400;line-height:1.75}
+.text-button{min-height:40px;padding:8px 0;color:var(--text-primary,#223246);font-weight:550}
+nav button{min-height:44px;border-radius:10px}
+nav button[aria-selected=true]{background:var(--ui-selected);border-color:transparent}
+.mode-control select{min-height:38px;background-color:var(--ui-field);border-radius:8px}
+article{border-radius:14px;border-color:var(--ui-line)}
+.section-label,.eyebrow{font-size:11px;letter-spacing:.075em}
+.pill{background:var(--ui-chip);border-color:transparent;font-size:11px;padding:3px 9px}
+.stat{background:var(--ui-field);border-color:var(--ui-line)}
+.stat strong{font-size:22px;letter-spacing:-.025em}
+.stat small{font-size:12px}
+.row{padding:18px 0;border-color:var(--ui-line)}
+.row>strong{font-size:14px}
+.row>p{font-size:13px;line-height:1.85;margin-top:7px}
+.security-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:17px 0;border-bottom:1px solid var(--ui-line);align-items:start}
+.security-row:last-child{border-bottom:0}
+.security-row h3{font-size:14px;font-weight:600;line-height:1.5}
+.security-row .security-code{font-size:11px;letter-spacing:.04em;color:var(--text-secondary,#6e7682);margin-top:3px;display:block}
+.security-row p{font-size:12px;line-height:1.85;color:var(--text-secondary,#6e7682);margin-top:8px}
+.security-metric{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.security-metric strong{font-size:20px;letter-spacing:-.02em;font-weight:650;white-space:nowrap}
+.security-metric small{font-size:10px}
+.holding-metrics{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:12px}
+.holding-metrics small{font-size:11px;display:block}
+.holding-metrics strong{font-size:15px;font-weight:550}
+.activity-item{border-left:3px solid var(--ui-line)}
+.activity-item:has(.danger){border-left-color:var(--ui-error-line)}
+.state-label{font-size:11px;padding:4px 9px;border:0;border-radius:6px;background:var(--ui-chip);font-weight:600}
+.danger,.notice.error{color:var(--ui-error)}
+.state-label.danger{background:var(--ui-error-bg)}
+.notice{border:1px solid var(--ui-line);background:var(--ui-field);font-size:12px;line-height:1.8}
+.notice.error{border-color:var(--ui-error-line);background:var(--ui-error-bg)}
+.feedback-state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px 22px;gap:0;color:var(--text-primary,#223246);border-radius:12px}
+.feedback-state h3{font-size:16px;font-weight:600;margin:15px 0 9px;line-height:1.6}
+.feedback-state>p{font-size:13px;color:var(--text-secondary,#6e7682);max-width:460px;line-height:1.85;margin:0}
+.feedback-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:var(--ui-chip);color:var(--text-secondary,#6e7682)}
+.feedback-icon svg{width:25px;height:25px}
+.feedback-error .feedback-icon{background:var(--ui-error-bg);color:var(--ui-error)}
+.feedback-state details{width:100%;max-width:520px;text-align:left;margin:18px 0 0}
+.feedback-state pre{font-size:11px;color:var(--text-secondary,#6e7682);overflow-wrap:anywhere;padding:12px;background:var(--ui-chip);border-radius:8px}
+.retry-button{margin-top:20px;min-width:132px;background:var(--ui-field);font-size:13px;font-weight:600}
+.loading-ring{width:24px;height:24px;border:2px solid var(--ui-line);border-right-color:var(--text-primary,#223246);border-radius:50%;animation:ui-spin var(--motion-spinner-cycle,900ms) linear infinite}
+.skeleton-lines{display:grid;gap:9px;width:min(100%,350px);margin-top:24px}
+.skeleton-lines i{height:9px;background:var(--ui-chip);border-radius:5px}
+.skeleton-lines i:nth-child(2){width:84%}.skeleton-lines i:nth-child(3){width:60%}
+@keyframes ui-spin{to{transform:rotate(360deg)}}
+.workspace.is-unavailable .tab,.workspace.is-unavailable #research-guide{display:none!important}
+#workspace-read-state{margin-bottom:22px;background:var(--surface,#fff);border:1px solid var(--ui-line)}
+#config-form .form-step{padding:25px 24px}
+#config-form .form-step>p{line-height:1.9}
+#config-form .config-step{border-radius:8px 8px 0 0;min-height:62px;font-size:12px;padding:12px 10px}
+#config-form .config-step[aria-current=step]{background:var(--ui-selected);border-bottom-color:var(--ui-focus)}
+#config-form .config-step span{font-size:10px;margin-bottom:2px}
+
+#config-form .checks{gap:0;border:1px solid var(--ui-line);border-radius:12px;overflow:hidden;margin-top:22px}
+#config-form .checks label{padding:16px 14px;margin:0;align-items:center;gap:12px;font-size:13px;font-weight:500;min-height:61px;border-bottom:1px solid var(--ui-line);background:var(--ui-field);cursor:pointer}
+#config-form .checks label:last-child{border-bottom:0}
+#config-form .checks input[type=checkbox]{appearance:none;flex:0 0 36px;min-height:22px;width:36px;height:22px;padding:0;border-radius:20px;background:var(--ui-line);border:1px solid var(--ui-line);position:relative;margin:0;box-shadow:none}
+#config-form .checks input[type=checkbox]::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--surface,#fff);position:absolute;left:2px;top:2px;transition:transform var(--motion-fast,120ms) var(--motion-ease-out,ease-out)}
+#config-form .checks input[type=checkbox]:checked{background:var(--ui-accent);border-color:var(--ui-accent)}
+#config-form .checks input[type=checkbox]:checked::after{transform:translateX(14px);background:var(--ui-accent-ink)}
+.field-error{font-size:12px;line-height:1.65;font-weight:450;color:var(--ui-error);margin-top:0;display:block}
+input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--ui-error-line);background:var(--ui-error-bg)}
+.field-unit{display:flex;align-items:center;gap:0;position:relative}
+.field-unit input{padding-right:40px;flex:1;width:100%}
+.field-unit>span{position:absolute;right:13px;pointer-events:none;color:var(--text-secondary,#6e7682);font-size:12px;font-weight:400}
+.form-actions{padding:14px 0;gap:8px;background:var(--panel-bg,var(--surface,#fff))}
+.form-actions button{min-height:46px}
+#reload-config,#discard-config{font-size:11px;background:transparent;border-color:transparent;color:var(--text-secondary,#6e7682);min-height:36px;padding:7px}
+.form-actions #config-next,.form-actions #save-config{flex:1 1 auto}
+.holding-card{border-color:var(--ui-line);background:var(--ui-chip);border-radius:12px}
+#partner-status{font-size:12px;margin-top:-5px}
+.market-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;padding:12px 0;border-top:1px solid var(--ui-line)}
+#market-up-label{color:var(--market-up)}#market-down-label{color:var(--market-down)}
+.market-legend span:last-child{margin-left:auto;color:var(--text-secondary,#6e7682)}
+.settings>h1{font-size:23px}.settings>p{line-height:1.85}
+.settings .config-progress{font-size:11px}.settings #settings-status{font-size:12px;line-height:1.8}
+@media(max-width:650px){
+  button,input,select,textarea{min-height:46px}
+  input,select,textarea{font-size:16px}
+  main{padding:0 16px 20px}.app-sidebar{padding:14px 16px 10px}
+  nav button{font-size:11px;min-height:44px;padding:9px 1px}
+  .context-line{font-size:11px;line-height:1.8}.mode-control select{font-size:12px;min-height:40px}
+  .hero-description{font-size:13px;line-height:1.9}
+  .section-intro p,.muted{line-height:1.9}
+  .text-button{min-height:44px;font-size:12px}
+  .dashboard-rail .text-button{font-size:12px}
+  .journey-step strong{font-size:11px}
+  .feedback-state{padding:30px 15px}.feedback-state h3{font-size:15px}.feedback-state>p{font-size:12px}
+  #config-form .form-step{padding:22px 16px}
+  #config-form label{font-size:13px}
+  #config-form .config-step{font-size:11px;padding:10px 5px;min-height:62px}
+  #config-form .form-grid{gap:20px}
+  #config-form .form-actions{position:static;padding-bottom:max(16px,env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1fr}
+  #config-form .form-actions #config-next,#config-form .form-actions #save-config{grid-column:1/-1;grid-row:1;margin:0;order:0}
+  #config-form .form-actions #config-back{grid-column:1/-1}
+  #config-form .form-actions #reconcile-config{grid-column:1/-1}
+  #config-form .checks label{font-size:13px;line-height:1.8;padding:16px 13px}
+  .settings{padding:16px 8px}.settings article{padding:22px 16px}
+  .security-row{gap:10px}.security-row h3{font-size:14px}.security-metric strong{font-size:19px}
+  .chart-card .section-heading{gap:10px}.market-legend{gap:12px}
+  .section-heading .text-button{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){.loading-ring,button[aria-busy=true]::before{animation:none}.checks input::after{transition:none}}
+#config-message:not(.error){background:transparent;border:0;padding:0 2px;color:var(--text-secondary,#6e7682);font-size:12px;margin-bottom:18px}
+.empty-state{padding:36px 20px}.empty-state h3{font-size:16px}.empty-state p{font-size:13px}
+.settings-page{background:transparent}
+.workspace input::placeholder,.workspace textarea::placeholder,.settings-page input::placeholder,.settings-page textarea::placeholder{color:var(--text-secondary,#5c6d84);opacity:1;font-weight:400}
+.primary:disabled,.primary:disabled:hover{opacity:.5;filter:none}
+.security-row h3,.security-row p,.security-code,.account-amount{overflow-wrap:anywhere}
+@media(max-width:650px){.mode-control select{min-height:44px}#config-form .form-actions #reload-config,#config-form .form-actions #discard-config{min-height:44px}}
+
+/* One size for editable account controls; currency is a unit, not a display headline. */
+.configuration-layout{display:block;max-width:760px}
+#config-form .form-grid{grid-template-columns:1fr}
+#config-form input:not([type=checkbox]):not([type=range]),#config-form select{height:46px;min-height:46px;max-height:46px;font-size:14px;font-weight:450;line-height:20px;border-radius:10px;padding:12px 14px;letter-spacing:normal}
+#config-form .field-unit input{padding-right:44px!important}
+#config-form input:focus,#config-form select:focus{outline-width:1px;outline-offset:1px}
+nav button[aria-selected=false]{background:transparent}
+nav button[aria-selected=true]{background:transparent;border:1px solid var(--ui-line);border-left:3px solid var(--ui-focus);color:var(--text-primary)}
+#config-form .config-step[aria-current=step]{background:transparent;color:var(--text-primary);border-bottom-color:var(--ui-focus)}
+#config-form .config-step[aria-current=step] span{color:var(--text-secondary)}
+@media(min-width:651px){#config-form .form-actions .primary{flex:0 0 160px;margin-left:auto}#config-form .form-actions #config-next{order:2}#config-form .form-actions #reload-config{margin-right:auto}}
+@media(max-width:650px){#config-form input:not([type=checkbox]):not([type=range]),#config-form select{font-size:16px}}
+
+/* Text controls share the same dimensions throughout the workspace. */
+.workspace input:not([type=checkbox]):not([type=range]),.workspace select,.settings input:not([type=checkbox]):not([type=range]),.settings select{height:46px;min-height:46px;max-height:46px;font-size:14px;line-height:20px;border-radius:10px;padding-top:12px;padding-bottom:12px}
+.mode-control select{width:116px;min-width:116px}
+@media(max-width:650px){.workspace input:not([type=checkbox]):not([type=range]),.workspace select,.settings input:not([type=checkbox]):not([type=range]),.settings select{font-size:16px}}
+/* Numeric lists: one type scale, stable columns and explicit units. */
+.security-metric strong,.holding-metrics strong,.trend-chart .trend-ohlc strong{font-size:16px;font-weight:600;line-height:24px;font-variant-numeric:tabular-nums;letter-spacing:0;text-align:right}
+.security-metric{min-width:84px;gap:4px}.security-metric small{font-size:11px}
+.holding-metrics{grid-template-columns:1fr;gap:0;margin-top:10px}
+.holding-metrics>div{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid var(--ui-line)}
+.holding-metrics>div:last-child{border-bottom:0}.holding-metrics small{font-size:12px}
+.stat strong{font-variant-numeric:tabular-nums;line-height:1.5}.row strong{font-variant-numeric:tabular-nums}
+/* Switch position, label and text all convey state, without relying on color alone. */
+#config-form .checks label{display:grid;grid-template-columns:minmax(0,1fr) 40px 44px;gap:10px;min-height:70px;border-left:3px solid transparent;padding-left:13px}
+#config-form .checks .switch-caption{font-size:13px;line-height:1.7;font-weight:500}
+#config-form .checks .switch-state{font-size:11px;line-height:20px;text-align:right;color:var(--text-secondary);white-space:nowrap}
+#config-form .checks input[type=checkbox]{width:40px;height:24px;min-height:24px;flex-basis:40px;border:1px solid var(--text-secondary);background:var(--ui-chip)}
+#config-form .checks input[type=checkbox]::after{width:18px;height:18px;left:2px;top:2px;background:var(--text-secondary)}
+#config-form .checks input[type=checkbox]:checked{background:var(--ui-accent);border-color:var(--ui-accent)}
+#config-form .checks input[type=checkbox]:checked::after{transform:translateX(16px);background:var(--ui-accent-ink)}
+#config-form .checks label:has(input:checked:not(:disabled)){border-left-color:var(--ui-focus)}
+#config-form .checks label:has(input:checked:not(:disabled)) .switch-state{color:var(--text-primary);font-weight:650}
+#config-fields:disabled{opacity:1}
+#config-form .checks label:has(input:disabled){background:var(--ui-chip);color:var(--text-secondary);cursor:not-allowed;border-left-color:transparent}
+#config-form .checks input[type=checkbox]:disabled{opacity:1;background:var(--ui-chip);border-style:dashed;border-color:var(--text-secondary);cursor:not-allowed}
+#config-form .checks input[type=checkbox]:disabled::after{background:var(--text-secondary)}
+button:disabled:not([aria-busy=true]),.primary:disabled:not([aria-busy=true]),.primary:disabled:not([aria-busy=true]):hover{opacity:1;color:var(--text-secondary);background:var(--ui-chip);border:1px dashed var(--text-secondary);filter:none;cursor:not-allowed}
+input:disabled:not([type=checkbox]),select:disabled{opacity:1;color:var(--text-secondary);background-color:var(--ui-chip);border-style:dashed;cursor:not-allowed}
+nav button[aria-selected=true]{border-left:3px solid var(--ui-focus);font-weight:700}
+#config-form .config-step[aria-current=step]{border-bottom-width:3px;font-weight:700}
+@media(max-width:650px){.security-metric{min-width:70px}#config-form .checks label{min-height:74px;gap:8px;padding-right:12px}.holding-metrics>div{gap:12px}}
+
+/* Industry preferences: scoped additions shared by settings and account editor. */
+#config-form .industry-preferences{border:1px solid var(--ui-line);border-radius:12px;padding:18px;margin:0 0 24px;overflow-wrap:anywhere}
+#config-form .industry-preferences>h3{font-size:15px;margin:0 0 8px}
+#config-form .industry-preferences>p{font-size:12px;line-height:1.8;margin:10px 0}
+#config-form .industry-scope-summary{font-weight:600}
+#config-form .industry-selected{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+#config-form .industry-selected-chip{max-width:100%;min-height:36px;padding:6px 10px;font-size:12px;white-space:normal;overflow-wrap:anywhere;background:var(--ui-selected);color:var(--text-primary);border-color:var(--ui-line)}
+#config-form .industry-catalog-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+#config-form .industry-catalog-option{display:grid;grid-template-columns:25px minmax(0,1fr);align-items:start;gap:9px;padding:11px 10px;min-width:0;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-field);font-weight:400;line-height:1.65}
+#config-form label.industry-catalog-option{cursor:pointer}
+#config-form .industry-catalog-option:has(input:checked){border-color:var(--ui-focus);border-left-width:3px;padding-left:8px;background:var(--ui-selected)}
+#config-form .industry-catalog-option strong{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+#config-form .industry-catalog-option small{display:block;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+#config-form .industry-catalog-option input[type=checkbox]{appearance:auto;width:18px;min-height:18px;height:18px;padding:0;margin:2px 0;accent-color:var(--ui-focus)}
+#config-form .industry-catalog-rank{font-size:11px;color:var(--text-secondary);font-variant-numeric:tabular-nums;padding-top:2px}
+#config-form .industry-catalog-actions{display:flex;flex-wrap:wrap;gap:8px}
+#config-form .industry-catalog-actions button{min-height:42px;font-size:12px;white-space:normal;padding:9px 12px}
+@media(max-width:650px){#config-form .industry-preferences{padding:14px 12px}#config-form .industry-catalog-list{grid-template-columns:1fr}#config-form .industry-catalog-actions{display:grid;grid-template-columns:1fr}#config-form .industry-catalog-actions button{width:100%;min-height:44px}}

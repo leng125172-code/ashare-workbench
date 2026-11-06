@@ -1,0 +1,63 @@
+{
+  "name": "dsh-plugin-ashare-workbench",
+  "version": "0.17.0",
+  "description": "A股投研：账户倾向行业、成交额前120、原文互核、四组/三档、风险约束与计划；独立Cindy/DSH适配，无自动交易。",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dsh/index.mjs",
+  "exports": {
+    ".": "./dsh/index.mjs",
+    "./dsh": "./dsh/index.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leng125172-code/ashare-workbench.git"
+  },
+  "homepage": "https://github.com/leng125172-code/ashare-workbench#readme",
+  "bugs": {
+    "url": "https://github.com/leng125172-code/ashare-workbench/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cindy",
+    "ashare",
+    "investment-research"
+  ],
+  "engines": {
+    "node": ">=22.22.0",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh/cordis.patch.yml"
+    }
+  },
+  "files": [
+    "dsh/",
+    "plugin/*.js",
+    "plugin/node/",
+    "plugin/ghost.json",
+    "plugin/assets/icon.png",
+    "plugin/LICENSE.*",
+    "plugin/THIRD_PARTY_NOTICES.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "test:dsh": "node --test tests/dsh*.test.cjs",
+    "test:cindy": "node scripts/test-cindy.cjs",
+    "check:package": "npm pack --dry-run --json"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

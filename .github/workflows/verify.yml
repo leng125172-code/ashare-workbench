@@ -1,0 +1,19 @@
+name: Verify source and packages
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  cindy-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+      - run: npm run test:cindy
+      - name: Check DSH source syntax
+        run: for file in dsh/*.mjs; do node --check "$file"; done
+      - name: Validate distributable inventory without installing dependencies
+        run: mkdir -p artifacts && npm pack --ignore-scripts --json --pack-destination artifacts

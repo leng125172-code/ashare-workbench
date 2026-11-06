@@ -1,0 +1,2 @@
+/* Host palette contract fixture; not a claim about the user's current theme. */
+:root{--text-primary:#edf1f7;--text-secondary:#b7c0cc;--text-tertiary:#7f8b9b;--text-placeholder:#a0acbc;--surface:#1b1f27;--panel-bg:#12151b;--surface-elevated:#242a34;--surface-chip:#29313c;--border-default:#3b4552;--accent-cta-bg:#b9ccff;--accent-pure-cta-fg:#172344;--accent-soft:#263452;--focus-ring:#8caeff;--error-bg:#351f26;--error-fg:#ffb3bc;--error-border:#b75c6e;--motion-fast:120ms;--motion-ease-out:ease-out;--motion-spinner-cycle:900ms;color-scheme:dark}body{background:var(--panel-bg)}

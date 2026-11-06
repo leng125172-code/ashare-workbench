@@ -1,0 +1,4 @@
+interface:
+  display_name: "A股投研"
+  short_description: "行业与个股研究、建议配仓、计划复查及微信ClawBot报告"
+  default_prompt: "结合当前持仓或投入资金，执行一轮A股投研，更新投资建议计划和对应复查任务，并发送微信ClawBot报告。"

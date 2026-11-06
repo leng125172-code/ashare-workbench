@@ -1,0 +1,81 @@
+{
+  "version": "0.17.0",
+  "testedAt": "2026-11-06T05:49:29.119Z",
+  "tests": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0,
+    "logSha256": "853433fcc05dcaddd8de3d1ea880ad18f717b94bd9eba382d28b64a7a67b7996",
+    "isolation": "temporary plugin-owned directories; explicit offline providers, no user live/simulation storage"
+  },
+  "nativeSdk": {
+    "ok": true,
+    "dshVersion": "0.2.1-rc.5",
+    "packageType": "commonjs",
+    "registeredTools": 17,
+    "realSdk": true,
+    "isolatedData": true,
+    "noActiveProfileChanged": true,
+    "noModelRequest": true,
+    "verified": [
+      "native registration of every business schema",
+      "live get_state",
+      "simulation industry pagination",
+      "unbound WeChat capability",
+      "SDK input type validation",
+      "simulation PNG export with actual package metadata"
+    ],
+    "notVerified": [
+      "real scheduler persistence/timed dispatch",
+      "external WeChat connection/delivery",
+      "npm publication"
+    ]
+  },
+  "nodeVersion": "v22.22.1",
+  "png": {
+    "path": "dsh/assets/600519-day-simulation.png",
+    "width": 1100,
+    "height": 780,
+    "simulation": true,
+    "visuallyInspected": true
+  },
+  "sourceSha256": {
+    "dsh/index.mjs": "d800b9ea539792cfd01bc3a2d0b2762f8d1e67e1633ec84a101bd098c5bc4190",
+    "dsh/runtime.mjs": "3c2d09a2f1df5beeab9e5c6087429056700f2eea76f3887dfd8abd14ab40728d",
+    "dsh/library.mjs": "6af616a54b64523144e37b265e95e861af5bc7a30d508c6a5fda8cc50c29e0f0",
+    "dsh/definitions.mjs": "011051ff4c3fd96db18720ceff79bdd67ec1378ea28455bff5ec9e12af0c8e03",
+    "dsh/host-actions.mjs": "82b6e505651f6989cc29c96807f18e575b28129a4f56acf51855998b324a1577",
+    "dsh/chart.mjs": "d700104a59a8612885c43e21cd92354d8de8b6e71fadc97c7bef03b6e4218761",
+    "dsh/cordis.patch.yml": "1c9fc0dccbc9e720bf2f3740183ce0e828990b23867cede57fb852cbfd2364e2",
+    "dsh/native-smoke.mjs": "a23fd2575151d5fd8df1c2f671114ec93d050be6f76b32ec703a32b97c55929e"
+  },
+  "notPerformed": [
+    "active web profile installation/restart",
+    "real scheduler persistence/timed delivery",
+    "external WeChat connection/sending",
+    "npm publish",
+    "DSH community market submission"
+  ],
+  "scheduleReconciliation": {
+    "preDispatchExpectation": "full title, exact prompt/marker, canonical timing, Session/action ID and SHA256 persisted before external call",
+    "postDispatchAndReconcile": "same full-field matcher; known external ID cannot be substituted; returned Session when present must agree; exactly one native row required",
+    "historicalReceiptDoesNotSkipRevalidation": true,
+    "updateVerifiesPriorOwnershipBeforeOverwrite": true,
+    "regressions": [
+      "same ID unrelated prompt",
+      "marker retained but prompt changed",
+      "interval changed",
+      "title changed",
+      "cron changed",
+      "time zone changed",
+      "different Session",
+      "known ID cannot switch to another exact-looking row",
+      "unknown ID exact/ambiguous match",
+      "historical success externally repurposed",
+      "expectation metadata corrupt/missing",
+      "normal update same ID",
+      "update of externally repurposed ID refused"
+    ]
+  },
+  "nativePackageMetadataSha256": "2436e0871781ab7262981c9590b673468fd908e3e8c947c184bbe703fab3e0f9"
+}

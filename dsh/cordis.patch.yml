@@ -1,0 +1,3 @@
+- insert:
+    - id: ashare-workbench
+      name: 'dsh-plugin-ashare-workbench/dsh'
