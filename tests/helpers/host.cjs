@@ -24,7 +24,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
   const remaining=entries.filter(e=>e.path>after),page=remaining.slice(0,limit),hasMore=remaining.length>page.length;
   return {ok:true,op:'list',entries:page,hasMore,nextCursor:hasMore&&page.length?Buffer.from(page.at(-1).path).toString('base64'):null};
  };
- const items=[1,2,3].map(i=>({symbol:'sh60000'+i,name:'股票'+i,quote:{price:100,asOf:now,source:'fixture'}}));
+ const items=options.items||[1,2,3].map(i=>({symbol:'sh60000'+i,name:'股票'+i,quote:{price:100,asOf:now,source:'fixture'}}));
  const cindy={
   fetch:async r=>options.fetchHandler?options.fetchHandler(r):options.fetchResponse||{ok:false,message:'fixture-fallback-offline'},
   onHostMessage:f=>{listener=f;},
