@@ -61,8 +61,13 @@ async function quotes(symbols) {
   const s = await get('https://qt.gtimg.cn/q='+codes.join(','), true), result = {};
   for (const match of s.matchAll(/v_((?:sh|sz|bj)\d{6})="([^"]*)"/g)) {
     const a = match[2].split('~'); if (a.length < 40) continue;
+    // STAR packets observed in production do not share the mainboard volume
+    // scale. Keep their source value without guessing an undocumented unit.
+    const volumeRaw=C.number(a[6]), ambiguousVolume=a[61]==='GP-A-KCB';
     result[match[1]] = { name:a[1], price:C.number(a[3]), previousClose:C.number(a[4]), changePct:C.number(a[32]), high:C.number(a[33]), low:C.number(a[34]),
-      volume:C.number(a[6]) === null ? null : Number(a[6])*100, amount:C.number(a[37]) === null ? null : Number(a[37])*10000,
+      volume:ambiguousVolume||volumeRaw===null?null:volumeRaw*100, volumeRaw,
+      ...(ambiguousVolume?{volumeUnit:'unknown',volumeWarning:'腾讯科创板成交量口径未核实；保留原值，不换算为股数。'}:{}),
+      amount:C.number(a[37]) === null ? null : Number(a[37])*10000,
       open:C.number(a[5]),upperLimit:C.number(a[47]),lowerLimit:C.number(a[48]),bid1:C.number(a[9]),ask1:C.number(a[19]),bid1SizeRaw:C.number(a[10]),ask1SizeRaw:C.number(a[20]),providerInstrumentType:a[61]||null,turnover:C.number(a[38]), pe:C.number(a[39]), pb:C.number(a[46]), asOf:timeCN(a[30]), fetchedAt:Date.now(), source:'tencent', priceBasis:'unadjusted' };
   }
   return result;
