@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-ashare-workbench",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "A股投研：账户倾向行业、成交额前120、原文互核、四组/三档、风险约束与计划；独立Cindy/DSH适配，无自动交易。",
   "license": "MIT",
   "type": "commonjs",

@@ -17,7 +17,7 @@ globalThis.AShareConfigEditor={mount(container,{request,onSaved=async()=>{},onNe
     <p class="muted">单股上限 ≤ 行业上限 ≤ 总仓位上限。风险预算不保证实际亏损上限。</p></article>
     <article class="form-step" data-form-step="2" hidden><h2>研究与提醒</h2>
     <section class="industry-preferences" aria-labelledby="industry-preferences-title"><h3 id="industry-preferences-title">倾向行业</h3><p class="muted">先明确研究范围，再采集这些行业的成分股。成交额排名只反映交易活跃度，不代表投资价值。</p>
-    <label>行业范围<select name="industrySelectionMode"><option value="hot120">成交额前120个行业（默认）</option><option value="manual">手动选择行业</option></select></label>
+    <div class="industry-range-controls"><label>行业范围<select name="industrySelectionMode"><option value="hot120">成交额前120个行业（默认）</option><option value="manual">手动选择行业</option></select></label><button id="industry-ranking-refresh" type="button" aria-describedby="industry-scope-summary">重新获取排名</button></div>
     <input name="industryIds" type="hidden" value="">
     <p id="industry-scope-summary" class="industry-scope-summary" role="status"></p>
     <div id="industry-selected" class="industry-selected" aria-label="已选择的倾向行业" hidden></div>
@@ -42,7 +42,7 @@ globalThis.AShareConfigEditor={mount(container,{request,onSaved=async()=>{},onNe
   let industrySelected=new Set(),industryRows=[],industryNames=new Map(),industryNextOffset=null,industryLoading=false,industryGeneration=0,industryLoaded=false,industrySearchTimer=null,industryCatalogToken=null;
   const industryManual=()=>f.industrySelectionMode.value==='manual';
   const say=(message,error=false)=>{q('#config-message').textContent=(error?'填写提示：':'')+message;q('#config-message').className='notice'+(error?' error':'');};
-  function controls(){q('#config-next').disabled=loading||!base||saving||!!uncertain;q('#config-back').disabled=saving||!!uncertain;for(const b of form.querySelectorAll('[data-step]'))b.disabled=saving||!!uncertain;q('#config-fields').disabled=loading||!base||saving||!!uncertain;q('#save-config').disabled=loading||!base||saving||!!uncertain||confirmed;q('#save-config').setAttribute('aria-busy',String(saving));q('#save-config').toggleAttribute('data-confirmed',confirmed);if(confirmed)q('#save-config').dataset.confirmed='true';q('#save-config').textContent=saving?'保存中…':confirmed?'已保存':'保存配置';q('#reload-config').disabled=loading||!base||saving||!!uncertain;q('#discard-config').hidden=!dirty||saving||!!uncertain;q('#reconcile-config').hidden=!uncertain;q('#industry-catalog-retry').disabled=loading||!base||saving||!!uncertain||industryLoading;q('#industry-catalog-more').disabled=loading||!base||saving||!!uncertain||industryLoading;syncSwitchStates();}
+  function controls(){q('#config-next').disabled=loading||!base||saving||!!uncertain;q('#config-back').disabled=saving||!!uncertain;for(const b of form.querySelectorAll('[data-step]'))b.disabled=saving||!!uncertain;q('#config-fields').disabled=loading||!base||saving||!!uncertain;q('#save-config').disabled=loading||!base||saving||!!uncertain||confirmed;q('#save-config').setAttribute('aria-busy',String(saving));q('#save-config').toggleAttribute('data-confirmed',confirmed);if(confirmed)q('#save-config').dataset.confirmed='true';q('#save-config').textContent=saving?'保存中…':confirmed?'已保存':'保存配置';q('#reload-config').disabled=loading||!base||saving||!!uncertain;q('#discard-config').hidden=!dirty||saving||!!uncertain;q('#reconcile-config').hidden=!uncertain;q('#industry-catalog-retry').disabled=loading||!base||saving||!!uncertain||industryLoading;q('#industry-catalog-more').disabled=loading||!base||saving||!!uncertain||industryLoading;q('#industry-ranking-refresh').disabled=loading||!base||saving||!!uncertain||industryLoading;q('#industry-ranking-refresh').setAttribute('aria-busy',String(industryLoading));q('#industry-ranking-refresh').textContent=industryLoading?'正在获取…':'重新获取排名';syncSwitchStates();}
   function mark(){confirmed=false;q('#config-saved-next').hidden=true;dirty=true;controls();say('有未保存的修改。关闭页面前请保存。');}
   function showStep(index){step=index;for(const item of form.querySelectorAll('[data-form-step]'))item.hidden=Number(item.dataset.formStep)!==step;for(const b of form.querySelectorAll('[data-step]')){if(Number(b.dataset.step)===step)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');}q('#config-back').hidden=step===0;q('#config-next').hidden=step===2;q('#save-config').hidden=step!==2;q('#config-progress').textContent=['第1步，共3步','第2步，共3步','第3步，共3步'][step];if(step===2&&base&&!industryLoaded&&!industryLoading)loadIndustries();}
   function decorate(scope){for(const input of scope.querySelectorAll('input,select')){if(input.type==='checkbox'||input.dataset.decorated)return;input.dataset.decorated='true';input.id=input.id||'cfg-'+(input.name||crypto.randomUUID());const hint=input.closest('label')?.querySelector('small');if(hint){hint.id=input.id+'-hint';input.setAttribute('aria-describedby',hint.id);}const unit=percents.includes(input.name)?'%':input.name==='cash'||input.dataset.field==='cost'?'元':input.dataset.field==='quantity'?'股':input.name==='horizonDays'?'天':input.name==='reviewMinutes'?'分钟':null;if(unit){const wrap=document.createElement('span');wrap.className='field-unit';input.before(wrap);wrap.append(input);const suffix=document.createElement('span');suffix.textContent=unit;suffix.setAttribute('aria-hidden','true');wrap.append(suffix);}}}
@@ -60,6 +60,7 @@ globalThis.AShareConfigEditor={mount(container,{request,onSaved=async()=>{},onNe
   function formatIndustryAmount(value){if(!Number.isFinite(value)||value<0)return '成交额未返回';return value>=100000000?'成交额 '+(value/100000000).toFixed(2)+'亿元':value>=10000?'成交额 '+(value/10000).toFixed(2)+'万元':'成交额 '+value.toFixed(2)+'元';}
   function industryTime(value){return Number.isFinite(value)?new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'时间未返回';}
   function syncIndustrySelection(){
+    q('#industry-ranking-refresh').hidden=industryManual();q('#industry-catalog-retry').hidden=!industryManual();
     f.industryIds.value=[...industrySelected].join(',');q('#industry-manual-search').hidden=!industryManual();q('#industry-selected').hidden=!industryManual();
     q('#industry-scope-summary').textContent=industryManual()?'已选 '+industrySelected.size+' 个行业；仅研究已选范围。':'每轮按完整成交额快照选取前120个行业；不足120个时按实际可用目录展示。';
     const selected=q('#industry-selected');selected.replaceChildren();
@@ -77,9 +78,9 @@ globalThis.AShareConfigEditor={mount(container,{request,onSaved=async()=>{},onNe
     q('#industry-catalog-more').hidden=industryNextOffset===null;
   }
   async function loadIndustries({append=false,refresh=false}={}){
-    if(!base)return;const offset=append?industryNextOffset:0;if(offset===null)return;
+    if(!base||(refresh&&industryLoading))return;const offset=append?industryNextOffset:0;if(offset===null)return;
     const generation=++industryGeneration,mode=base.mode,manual=industryManual(),search=manual?f.industrySearch.value.trim():'';
-    industryLoading=true;industryLoaded=true;if(!append){industryRows=[];industryNextOffset=null;renderIndustryRows();}controls();q('#industry-catalog-status').textContent=append?'正在读取更多行业…':'正在读取行业名称、成交额与排名…';
+    industryLoading=true;industryLoaded=true;if(!append&&!refresh){industryRows=[];industryNextOffset=null;renderIndustryRows();}controls();q('#industry-catalog-status').textContent=refresh&&!manual?'正在重新获取成交额前120排名…':append?'正在读取更多行业…':'正在读取行业名称、成交额与排名…';
     try{
       const r=await request('list_industries',{offset,limit:30,...(append&&industryCatalogToken?{catalogToken:industryCatalogToken}:{}),...(refresh?{refresh:true}:{}),...(search?{search}:{})},mode);
       if(generation!==industryGeneration||base.mode!==mode||industryManual()!==manual)return;
@@ -92,9 +93,10 @@ globalThis.AShareConfigEditor={mount(container,{request,onSaved=async()=>{},onNe
       q('#industry-catalog-status').textContent=industryRows.length?(manual?'当前结果 '+industryRows.length+' / '+r.total+' 个行业。':'已展示成交额前 '+industryRows.length+' 名；默认研究范围为前120名。')+(r.ranking?.complete===false?' 排名数据不完整，请刷新核对；不会降级为全行业。':''):manual?'未找到匹配行业。已选行业仍保留。':'没有可展示的成交额排名，请重新读取。';
       q('#industry-catalog-retry').textContent='重新读取目录';syncIndustrySelection();renderIndustryRows();
     }catch(e){
-      if(generation!==industryGeneration)return;q('#industry-catalog-status').textContent='行业目录读取失败。已保存的行业和当前选择均保留；不会改为全行业。'+(e.message?' '+String(e.message).slice(0,180):'');q('#industry-catalog-retry').textContent='重试读取目录';
+      if(generation!==industryGeneration)return;q('#industry-catalog-status').textContent='行业目录读取失败。'+(!manual&&industryRows.length?'已保留上次排名，本次未更新。':'')+'已保存的行业和当前选择均保留；不会改为全行业。'+(e.message?' '+String(e.message).slice(0,180):'');q('#industry-catalog-retry').textContent='重试读取目录';
     }finally{if(generation===industryGeneration){industryLoading=false;controls();}}
   }
+  q('#industry-ranking-refresh').onclick=()=>loadIndustries({refresh:true});
   q('#industry-catalog-retry').onclick=()=>loadIndustries({refresh:true});q('#industry-catalog-more').onclick=()=>loadIndustries({append:true});
   f.industrySelectionMode.onchange=()=>{syncIndustrySelection();loadIndustries();};
   f.industrySearch.oninput=()=>{clearTimeout(industrySearchTimer);industrySearchTimer=setTimeout(()=>loadIndustries(),300);};

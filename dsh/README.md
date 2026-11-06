@@ -11,13 +11,13 @@
 本地已打包文件：
 
 ```sh
-dsh plugin --profile web add /绝对路径/dsh-plugin-ashare-workbench-0.17.0.tgz
+dsh plugin --profile web add /绝对路径/dsh-plugin-ashare-workbench-0.17.1.tgz
 ```
 
 在 npm **实际发布之后**，才可使用：
 
 ```sh
-dsh plugin --profile web add dsh-plugin-ashare-workbench@0.17.0
+dsh plugin --profile web add dsh-plugin-ashare-workbench@0.17.1
 ```
 
 `dsh plugin` 将包操作交给指定 profile 的包管理器，`add` 才是安装参数；不是 `plugin install` 或 `plugins install`。包的 `dsh.bundle` 加载 `dsh/cordis.patch.yml`，入口为根包导出的 `dsh-plugin-ashare-workbench/dsh`。该入口要求真实 `tools` 和 `profileContext` 服务，不能当普通浏览器脚本加载。

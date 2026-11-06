@@ -1,0 +1,228 @@
+{
+  "scope": "offline synthetic fixture only",
+  "version": "0.17.1",
+  "light": {
+    "passed": 25,
+    "results": [
+      {
+        "name": "默认明确为成交额前120，裸ID全行业入口已移除",
+        "passed": true
+      },
+      {
+        "name": "热度预览展示行业名称、成交额、排名、来源与上海时间",
+        "passed": true
+      },
+      {
+        "name": "热度预览不把行业当作已选择的手动项",
+        "passed": true
+      },
+      {
+        "name": "热门排名旁明确显示重新获取按钮",
+        "passed": true
+      },
+      {
+        "name": "重新获取显示加载态防重复且保留当前排名",
+        "passed": true
+      },
+      {
+        "name": "重新获取强制请求新快照并恢复按钮",
+        "passed": true
+      },
+      {
+        "name": "刷新失败保留上次排名并明确本次未更新",
+        "passed": true
+      },
+      {
+        "name": "目录更多按钮实际按offset读取下一页",
+        "passed": true
+      },
+      {
+        "name": "目录后续页携带第一页的catalogToken固定同一快照",
+        "passed": true
+      },
+      {
+        "name": "热门预览最多120项，不偷偷展示全目录",
+        "passed": true
+      },
+      {
+        "name": "明确重读传refresh并为后续分页使用新目录token",
+        "passed": true
+      },
+      {
+        "name": "手动模式保留目录重读并隐藏排名专用按钮",
+        "passed": true
+      },
+      {
+        "name": "空手动选择在写入前拒绝，明确不回退全行业",
+        "passed": true
+      },
+      {
+        "name": "回到风险步骤后可继续到行业选择再修正空手动项",
+        "passed": true
+      },
+      {
+        "name": "复选与已选计数、隐藏ID同步",
+        "passed": true
+      },
+      {
+        "name": "行业名称搜索由目录API筛选，离开结果的已选项保留",
+        "passed": true
+      },
+      {
+        "name": "支持行业代码搜索，结果不会清空其他选择",
+        "passed": true
+      },
+      {
+        "name": "热门与手动之间切换保留手动草稿",
+        "passed": true
+      },
+      {
+        "name": "保存持久化模式和完整选中ID，回读一致才显示完成",
+        "passed": true
+      },
+      {
+        "name": "目录失败保留已保存选择且显示可重试状态",
+        "passed": true
+      },
+      {
+        "name": "保存热门模式只提交hot120及空手动ID集合",
+        "passed": true
+      },
+      {
+        "name": "旧手动配置迁移显示为手动并保留尚未加载名称的ID",
+        "passed": true
+      },
+      {
+        "name": "setState切换资料模式后第一页不复用旧catalogToken",
+        "passed": true
+      },
+      {
+        "name": "模式切换后的迟到目录回包不会覆盖新配置选择",
+        "passed": true
+      },
+      {
+        "detail": {
+          "scrollWidth": 305,
+          "width": 320
+        },
+        "name": "320px主题布局无横向溢出",
+        "passed": true
+      }
+    ],
+    "theme": "light",
+    "total": 25,
+    "viewport": 320
+  },
+  "dark": {
+    "passed": 25,
+    "results": [
+      {
+        "name": "默认明确为成交额前120，裸ID全行业入口已移除",
+        "passed": true
+      },
+      {
+        "name": "热度预览展示行业名称、成交额、排名、来源与上海时间",
+        "passed": true
+      },
+      {
+        "name": "热度预览不把行业当作已选择的手动项",
+        "passed": true
+      },
+      {
+        "name": "热门排名旁明确显示重新获取按钮",
+        "passed": true
+      },
+      {
+        "name": "重新获取显示加载态防重复且保留当前排名",
+        "passed": true
+      },
+      {
+        "name": "重新获取强制请求新快照并恢复按钮",
+        "passed": true
+      },
+      {
+        "name": "刷新失败保留上次排名并明确本次未更新",
+        "passed": true
+      },
+      {
+        "name": "目录更多按钮实际按offset读取下一页",
+        "passed": true
+      },
+      {
+        "name": "目录后续页携带第一页的catalogToken固定同一快照",
+        "passed": true
+      },
+      {
+        "name": "热门预览最多120项，不偷偷展示全目录",
+        "passed": true
+      },
+      {
+        "name": "明确重读传refresh并为后续分页使用新目录token",
+        "passed": true
+      },
+      {
+        "name": "手动模式保留目录重读并隐藏排名专用按钮",
+        "passed": true
+      },
+      {
+        "name": "空手动选择在写入前拒绝，明确不回退全行业",
+        "passed": true
+      },
+      {
+        "name": "回到风险步骤后可继续到行业选择再修正空手动项",
+        "passed": true
+      },
+      {
+        "name": "复选与已选计数、隐藏ID同步",
+        "passed": true
+      },
+      {
+        "name": "行业名称搜索由目录API筛选，离开结果的已选项保留",
+        "passed": true
+      },
+      {
+        "name": "支持行业代码搜索，结果不会清空其他选择",
+        "passed": true
+      },
+      {
+        "name": "热门与手动之间切换保留手动草稿",
+        "passed": true
+      },
+      {
+        "name": "保存持久化模式和完整选中ID，回读一致才显示完成",
+        "passed": true
+      },
+      {
+        "name": "目录失败保留已保存选择且显示可重试状态",
+        "passed": true
+      },
+      {
+        "name": "保存热门模式只提交hot120及空手动ID集合",
+        "passed": true
+      },
+      {
+        "name": "旧手动配置迁移显示为手动并保留尚未加载名称的ID",
+        "passed": true
+      },
+      {
+        "name": "setState切换资料模式后第一页不复用旧catalogToken",
+        "passed": true
+      },
+      {
+        "name": "模式切换后的迟到目录回包不会覆盖新配置选择",
+        "passed": true
+      },
+      {
+        "detail": {
+          "scrollWidth": 305,
+          "width": 320
+        },
+        "name": "320px主题布局无横向溢出",
+        "passed": true
+      }
+    ],
+    "theme": "dark",
+    "total": 25,
+    "viewport": 320
+  }
+}

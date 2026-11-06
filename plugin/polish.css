@@ -211,3 +211,8 @@ nav button[aria-selected=true]{border-left:3px solid var(--ui-focus);font-weight
 #config-form .industry-catalog-actions{display:flex;flex-wrap:wrap;gap:8px}
 #config-form .industry-catalog-actions button{min-height:42px;font-size:12px;white-space:normal;padding:9px 12px}
 @media(max-width:650px){#config-form .industry-preferences{padding:14px 12px}#config-form .industry-catalog-list{grid-template-columns:1fr}#config-form .industry-catalog-actions{display:grid;grid-template-columns:1fr}#config-form .industry-catalog-actions button{width:100%;min-height:44px}}
+
+#config-form .industry-range-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px}
+#config-form .industry-range-controls>label{flex:1;min-width:0}
+#config-form #industry-ranking-refresh{min-height:46px;white-space:normal}
+@media(max-width:650px){#config-form .industry-range-controls{display:grid;grid-template-columns:minmax(0,1fr)}#config-form #industry-ranking-refresh{width:100%}}

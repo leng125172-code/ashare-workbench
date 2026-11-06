@@ -25,7 +25,7 @@
    ```
 
 4. 导航到同一路径的 `?theme=dark`，保持 `320 × 1100` 视口，重新运行同一脚本。每次复测先重新加载合成页面，避免上一轮测试状态干扰结果。
-5. 读取返回的 `passed`、`total`、`viewport`、`results`。预期浅色和深色各 `20/20`，且 `viewport` 必须等于 `320`。结果也显示在页面底部及 `window.industryPreferencesAcceptance`。
+5. 读取返回的 `passed`、`total`、`viewport`、`results`。预期浅色和深色各 `25/25`，且 `viewport` 必须等于 `320`。结果也显示在页面底部及 `window.industryPreferencesAcceptance`。
 6. 测试完成后停止本次启动的 HTTP 服务；不用改变系统浏览器、代理或真实插件设置。
 
 ## 覆盖范围
