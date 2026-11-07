@@ -44,7 +44,7 @@
 发布后的 npm 包名为 `dsh-plugin-ashare-workbench`；源码中包含 `dsh/cordis.patch.yml`。npm 包发布、社区审核与真正出现在插件中心需分别核对，源码仓库公开不代表已经上架。
 
 ```sh
-dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.1
+dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.2
 ```
 
 开发安装及工具/通道能力详见 [dsh 适配说明](dsh/README.md)。使用 `ashare_get_research(view:industry_catalog)` 查看范围，通过 `ashare_configure` 保存本平台账户，再按 `ashare_begin_research` → 分批采集 → 原文互核 → 只读行业分工 → 主代理保存/定稿推进。不要把模拟默认账户复制成真实资金。

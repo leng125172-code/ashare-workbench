@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-ashare-workbench",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "A股投研：成交额前120/手动倾向行业、资讯与K线、证据互核、行业四组/股票三档与计划；区分候选及停牌观察，缺报价备用核验、复牌重新评估。Cindy/DSH独立存储，仅建议，无自动交易。",
   "license": "MIT",
   "type": "commonjs",
