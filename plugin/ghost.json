@@ -1104,7 +1104,7 @@
     },
     {
       "name": "plan_control",
-      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。 failure_archive_preview/recover仅按原生不可变记录和版本/范围/摘要修复缺失失败归档，失败状态及外部动作保留。 failure_legacy_inventory只读分页检查原生旧分片清单/备份，不迁移、不拼片、不恢复写入。",
+      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。 failure_archive_preview/recover仅按原生不可变记录和版本/范围/摘要修复缺失失败归档，失败状态及外部动作保留。 failure_legacy_inventory只读分页检查原生旧分片清单/备份，不迁移、不拼片、不恢复写入。 已证明旧格式完整原字节时，failure_archive_preview/recover支持legacyManifest有序native refs；先保护源清单，不迁移、不回滚整state。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1550,6 +1550,110 @@
               "inventoryToken": {
                 "type": "string",
                 "pattern": "^[a-f0-9]{64}$"
+              },
+              "expectedSourceRevision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "expectedSourceChunkCount": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 128
+              },
+              "legacyManifest": {
+                "type": "object",
+                "description": "完整状态原始字节已预先校验的原生有序引用；只从本mode Library读原片，不接收run正文。",
+                "properties": {
+                  "schema": {
+                    "type": "integer",
+                    "const": 2
+                  },
+                  "storageFormat": {
+                    "type": "string",
+                    "const": "ashare-json-chunks/1"
+                  },
+                  "codec": {
+                    "type": "string",
+                    "const": "per-chunk"
+                  },
+                  "logicalBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16777216
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "payloadBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 16777216
+                  },
+                  "chunks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 128,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "characters": {
+                          "type": "integer",
+                          "minimum": 4,
+                          "maximum": 262144
+                        },
+                        "codec": {
+                          "type": "string",
+                          "enum": [
+                            "gzip",
+                            "utf8"
+                          ]
+                        },
+                        "logicalBytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 131072
+                        },
+                        "logicalSha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "payloadBytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 131072
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "sha256",
+                        "characters",
+                        "codec",
+                        "logicalBytes",
+                        "logicalSha256",
+                        "payloadBytes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "schema",
+                  "storageFormat",
+                  "codec",
+                  "logicalBytes",
+                  "sha256",
+                  "payloadBytes",
+                  "chunks"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [

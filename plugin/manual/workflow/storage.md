@@ -98,3 +98,7 @@ get_research的目录、股票、资讯、资料覆盖及派工清单支持offse
 `failure_legacy_inventory` 用原生Library分页列举当前模式的JSON、当前物理root完整有序manifest及备份链；需要已冻结的原全状态logical SHA/字节数和上述研究证明。第一页取得inventoryToken，后续页保持同一token并读至nextOffset=null。该入口不初始化SQLite、不迁移、不写档，不执行恢复。缺片、未知仓储文档或读取不完整须报告未完成，不当空库。
 
 旧版chunked→chunked保存只覆盖state.json，不保证保留先前manifest；单片内容寻址不等于留存每个版本的有序引用。原全状态SHA/总字节/片数只能校验结果，文件SHA、mtime、大小或去重片数不能推断原顺序。仅找到真正的完整有序manifest、完整state或包含完整原run的原生归档，并验证全部摘要后，才可另行设计正式legacy恢复；当前库存入口没有恢复写功能。
+
+已在库外将完整原始状态字节命中预先冻结的原生SHA/字节数后，可将其有序 `legacyManifest` 交给正式 `failure_archive_preview`：同时提供 `expectedStateLogicalSha256`、`expectedStateLogicalBytes`、`expectedSourceRevision`、`expectedSourceChunkCount` 及完整研究证明。最多128片，前片固定128KiB；仅从本模式Library按内容寻址原片读取，逐片及整状态重新校验，不接受调用方run/state正文。源版本、唯一run、配置、全部判断及原历史token均须一致。
+
+实际 `failure_archive_recover` 绑定当前根/版本与previewToken，先将验证过的清单以原格式顶层S.envelope单独不可变保存至计算摘要路径，并用raw IO读回；再写/核对目标报告归档，最后更新该failed索引计数及来源。保护源清单新增文件不使同键重试失效；不会回滚整份旧状态、账户、计划、动作或续期资料。源清单保护由storageProtection识别，后续缓存清理不得删仍被引用原片。失败报告仍明确是重建。归档/保护清单/根任一阶段失败，保留断点并按同键同参对账。

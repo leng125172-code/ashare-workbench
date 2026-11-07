@@ -32,7 +32,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
    if(unavailable)return {ok:false,errorCode:'LIBRARY_UNAVAILABLE'};
    if(r.op==='open')return {ok:true,state:'ready',usedBytes:[...files.values()].reduce((n,x)=>n+Buffer.byteLength(String(x)),0),fileCount:files.size+dbs.size,location:'fixture'};
    if(r.op==='status')return {ok:true,state:'ready',usedBytes:[...files.values()].reduce((n,x)=>n+Buffer.byteLength(String(x)),0),fileCount:files.size+dbs.size,location:'fixture'};
-   if(r.op==='read')return files.has(r.path)?{ok:true,content:files.get(r.path)}:{ok:false,errorCode:'NOT_FOUND'};
+   if(r.op==='read'){if(options.failLibraryRead?.(r.path))return {ok:false,errorCode:'FIXTURE_READ_FAILED',message:'fixture storage read failure'};return files.has(r.path)?{ok:true,content:files.get(r.path)}:{ok:false,errorCode:'NOT_FOUND'};}
    if(r.op==='write'){if(options.failLibraryWrite?.(r.path,r.content))return {ok:false,errorCode:'FIXTURE_WRITE_FAILED',message:'fixture storage write failure'};if(failReportOnce&&r.path.startsWith('reports/')){failReportOnce=false;return {ok:false,message:'fixture archive failure'};}files.set(r.path,r.content);return {ok:true};}
    if(r.op==='list')return libraryList(r);
    if(r.op==='stat'){const p=r.path;if(dbs.has(p))return {ok:true,op:'stat',path:p,kind:'file',bytes:0,mtime:0};if(files.has(p))return {ok:true,op:'stat',path:p,kind:'file',bytes:Buffer.byteLength(String(files.get(p))),mtime:0};return {ok:false,errorCode:'NOT_FOUND'};}
