@@ -66,7 +66,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
    case'assess':result=p.items.map(s=>({...s,indicators:C.indicators(options.bars||bars),klineAsOf:(options.bars||bars).at(-1)?.date,adjustment:'qfq',klineSource:'fixture'}));break;
    case'kline':result={source:'offline-fixture',adjustment:'qfq',period:'day',warnings:[],bars};break;
    case'information_source':if(options.failInformationSource)throw new Error('fixture-direct-offline');result={url:p.url,fetchedAt:Date.now(),sha256:options.sourceDigest||'a'.repeat(64),bytes:100,contentType:'application/pdf',isPdf:true,notice:'离线指纹样例'};break;
-   case'information':result={symbol:p.symbol,fetchedAt:Date.now(),announcements:{status:'available',complete:true,total:1,rows:[]},financials:{status:'available',rows:[{reportPeriod:'2026-09-30',noticeDate:'2026-10-31'}]},warnings:['离线资料包样例，不是真实公司证据。']};break;
+   case'information':result={symbol:p.symbol,fetchedAt:Date.now(),announcements:{status:'available',complete:true,total:1,rows:options.announcementRows||[]},financials:{status:'available',rows:[{reportPeriod:'2026-09-30',noticeDate:'2026-10-31'}]},warnings:['离线资料包样例，不是真实公司证据。']};break;
    case'regulatory_page':if(!options.regulatoryPageHandler)throw Error('fixture-native-regulatory-unavailable');result=await options.regulatoryPageHandler(p);break;
    case'instrument':result={symbol:p.symbol,category:'A股',name:'离线主体样例',fetchedAt:Date.now(),source:'offline-fixture'};break;
    case'execution':result=options.executionSnapshot||{symbol:p.symbol,priceBasis:'unadjusted',tradingStatus:{value:'unknown'}};break;

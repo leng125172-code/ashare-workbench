@@ -11,6 +11,7 @@ function period(s){if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s)||new D
 function clean(s,max=1200){if(typeof s!=='string'||!s.trim()||s.length>max)fail('资讯字段缺失或过长。');return s.trim();}
 function evidence(n,at=Date.now()){
  const url=publicUrl(n.url);const publishedMs=date(n.publishedAt,'发布时间');if(publishedMs>at+60000)fail('不能引用未来发布的资讯。');
+ if(n.tradingEvent!==undefined&&n.category!=='announcement')fail('停复牌事件仅允许公司公告。');
  const category=n.category||'market';if(![...CATEGORIES,'market'].includes(category))fail('资讯类别不支持。');
  const x={title:clean(n.title,800),url:url.href,source:String(n.source||url.hostname).slice(0,120),publishedAt:n.publishedAt,publishedMs,fetchedAt:at,keyword:String(n.keyword||'').slice(0,100),category,contentLevel:n.contentLevel||'metadata',provenance:'agent-supplied-source',reviews:[]};
  if(category==='market'){if(n.sectorId!==undefined){if(typeof n.sectorId!=='string'||!/^BK\d+$/.test(n.sectorId))fail('行业资讯归属须为有效行业代码。');x.sectorId=n.sectorId;}if(n.symbol!==undefined){if(typeof n.symbol!=='string'||!/^(sh|sz|bj)\d{6}$/.test(n.symbol))fail('公司资讯归属须为标准股票代码。');x.symbol=n.symbol;}return x;}
@@ -20,6 +21,12 @@ function evidence(n,at=Date.now()){
  if(category!=='valuation'&&!primary(x.url,category))fail('政策/公告/财报/风险证据须来自对应官方原文。');
  if(url.pathname==='/'||url.pathname==='')fail('资料目录首页不能代替具体原文。');
  x.summary=clean(n.summary,1600);
+ if(n.tradingEvent!==undefined){
+  if(category!=='announcement'||!primary(x.url,category))fail('停复牌事件须来自关联股票的官方公告。');
+  const t=n.tradingEvent;if(!t||!['suspended','resumed'].includes(t.state))fail('停复牌事件状态无效。');
+  const effectiveDate=period(t.effectiveDate);
+  x.tradingEvent={state:t.state,effectiveDate,basis:clean(t.basis,500)};
+ }
  if(n.validUntil!==undefined){x.validUntil=date(n.validUntil,'有效期');if(x.validUntil<=publishedMs)fail('有效期须晚于发布时间。');}
  if(category==='financial'){x.reportPeriod=period(n.reportPeriod);if(Date.parse(x.reportPeriod+'T00:00:00+08:00')>publishedMs)fail('财报发布日期不能早于报告期末。');}
  if(category==='valuation'){
@@ -90,5 +97,29 @@ const sources=[
  {category:'policy',label:'国家统计局',url:'https://www.stats.gov.cn/'}
 ];
 function sourceUrl(s){const u=publicUrl(s);if(!SOURCE_HOSTS.includes(u.hostname))fail('原文来源不在固定白名单。');return u.href;}
-return {SOURCE_HOSTS,sourceUrl,CATEGORIES,LABELS,evidence,review,status,coverage,primary,sources};
+function bindTradingEvent(e,dossier,at=Date.now()){
+ if(!dossier||dossier.symbol!==e.symbol||!Number.isFinite(dossier.fetchedAt)||at-dossier.fetchedAt>DAY||dossier.fetchedAt>at+60000)fail('停复牌事件须先获取同股票24小时内的官方公告资料包。');
+ const row=dossier.announcements?.rows?.find(x=>x.symbol===e.symbol&&x.url===e.url);
+ if(!row||!row.id||!Number.isFinite(row.publishedMs)||row.publishedMs!==e.publishedMs||!e.sourceSnapshot||e.contentLevel!=='full_text_reviewed')fail('停复牌原文须与同股票官方公告列表URL/日期匹配，并先保存正文指纹。');
+ return {symbol:e.symbol,announcementId:row.id,url:row.url,publishedMs:row.publishedMs,dossierFetchedAt:dossier.fetchedAt,sha256:e.sourceSnapshot.sha256};
+}
+function observation(stock,{news=[],sourceSnapshots={},analysisAt=0,at=Date.now()}={}){
+ const symbol=stock.symbol,today=new Date(at+8*3600000).toISOString().slice(0,10);
+ const events=news.filter(e=>e.symbol===symbol&&e.category==='announcement'&&e.tradingEvent&&primary(e.url,'announcement')&&e.publishedMs<=at&&e.tradingEvent.effectiveDate<=today).sort((a,b)=>a.tradingEvent.effectiveDate.localeCompare(b.tradingEvent.effectiveDate)||a.publishedMs-b.publishedMs);
+ const suspensions=events.filter(e=>e.tradingEvent.state==='suspended');
+ const lastStop=suspensions.at(-1),last=events.at(-1);
+ const supported=e=>status(e,at)==='supported'&&e.issuerBinding?.symbol===symbol&&e.issuerBinding?.url===e.url&&e.issuerBinding?.sha256===e.sourceSnapshot?.sha256&&sourceSnapshots[e.url]?.sha256===e.sourceSnapshot?.sha256;
+ const base={stage:stock.valueTier?'investment_candidate':'industry_member',label:stock.valueTier?'投资候选（非买入指令）':'行业成员（尚非投资候选）',allocationBlocked:false,quoteMissing:!Number.isFinite(stock.quote?.price)||stock.quote.price<=0};
+ const latestPeers=last?events.filter(e=>e.tradingEvent.effectiveDate===last.tradingEvent.effectiveDate&&e.publishedMs===last.publishedMs):[];
+ if(new Set(latestPeers.map(e=>e.tradingEvent.state)).size>1)return {...base,stage:'trading_status_unverified',label:'停复牌证据冲突待核验',allocationBlocked:true,reason:'相同生效日与发布时间存在相反事件，不能按提交顺序推断复牌。'};
+ if(lastStop){
+  if(!last||last.tradingEvent.state!=='resumed'||!supported(last))return {...base,stage:supported(lastStop)?'suspension_watch':'trading_status_unverified',label:supported(lastStop)?'停牌观察':'停复牌状态待核验',allocationBlocked:true,evidenceId:lastStop.id,reason:'停牌记录不能因报价恢复或证据到期自动解除；须核验后续复牌公告并重新分析。'};
+ }
+ if(last?.tradingEvent.state==='resumed'){
+  const boundary=Math.max(last.fetchedAt||0,...(last.reviews||[]).map(x=>x.checkedAt||0),Date.parse(last.tradingEvent.effectiveDate+'T00:00:00+08:00'));
+  if(!supported(last)||analysisAt<boundary||!Number.isFinite(stock.quote?.asOf)||stock.quote.asOf<boundary)return {...base,stage:'resumption_review',label:'复牌待重新评估',allocationBlocked:true,evidenceId:last.id,reason:'复牌公告、后续有效报价和本次重新分析须齐备，旧判断不能自动恢复。'};
+ }
+ return base;
+}
+return {SOURCE_HOSTS,sourceUrl,CATEGORIES,LABELS,evidence,review,status,coverage,observation,bindTradingEvent,primary,sources};
 });

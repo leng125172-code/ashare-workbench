@@ -160,6 +160,7 @@
     return total;
   }
   function recommendationSafety(stock,quote){
+    if(stock?.observation?.allocationBlocked)return {allowed:false,code:'OBSERVATION_ONLY',message:stock.observation.label+'；需核对停复牌证据、最新行情并重新评估，不能进入正权重配置。'};
     const normalized=v=>typeof v==='string'?v.normalize('NFKC').replace(/[\s*]/g,'').toUpperCase():'';
     const names=[stock?.name,quote?.name].map(normalized);
     if(names.some(n=>/^ST/.test(n)||/退/.test(n)))return {allowed:false,code:'RISK_NAME_BLOCKED',message:'名称出现ST或退市相关标识，不进入正权重建议；已有持仓可继续研究或给出退出建议。'};
@@ -282,8 +283,10 @@
     if(finite(q?.price)&&q.price>=position.target)flags.push({code:'TARGET_REACHED',message:'现价达到或高于未复权目标参考，需要复核计划。'});
     const information=detail.information?globalThis.AShareInformation?.coverage({news:detail.news,dossier:detail.information,sourceSnapshots:detail.sourceSnapshots||{},symbol:position.symbol,sectorId:position.sectorId,quote:q,at}):null;
     if(detail.information&&information?.status!=='supported')flags.push({code:'INFORMATION_REVIEW_MISSING',message:'本轮政策/公告/财报/估值/风险正文互核不足：'+(information?.issues||['核验模块不可用']).join('；')});
+    const observation=globalThis.AShareInformation?.observation({...position,quote:q},{news:detail.news,sourceSnapshots:detail.sourceSnapshots||{},at});
+    if(observation?.allocationBlocked)flags.push({code:'OBSERVATION_ONLY',message:observation.label+'；'+observation.reason});
     const missing=flags.some(f=>/MISSING|STALE/.test(f.code));
-    return {symbol:position.symbol,information,status:missing?'insufficient_data':flags.length?'review_required':'within_reference_range',flags,expectedDailyBar:expected,lastBar:bar?.date||null,
+    return {symbol:position.symbol,information,observation,status:missing?'insufficient_data':flags.length?'review_required':'within_reference_range',flags,expectedDailyBar:expected,lastBar:bar?.date||null,
       trend:i?.ready&&finite(q?.price)?q.price>=i.ma20?'above_ma20':'below_ma20':'not_available',freshNewsIds:freshNews.map(n=>n.id),
       caution:'机械检查不替代AI对资讯、原计划理由和投资价值的判断。'};
   }
@@ -292,6 +295,7 @@
     if(report.scanFindings){lines.push('', '## 推荐股票与计划符合校验');for(const f of report.scanFindings)lines.push(`- ${f.symbol}：${{consistent:'符合原计划',adjust:'需要调整或复查',insufficient:'证据不足'}[f.verdict]}；${f.reason}；证据${(f.newsIds||[]).join('、')}。`);}
     const value=v=>finite(v)?round(v,4):'缺失';
     for(const o of report.scanObservations||[])lines.push(`- 本轮扫描 ${o.symbol}：现价${value(o.quote?.price)}；报价时间${o.quote?.asOf?new Date(o.quote.asOf).toISOString():'未确认'}；来源${o.quote?.source||o.source||'未确认'}；日K末根${o.lastBar||'缺失'}；MA20=${value(o.indicators?.ma20)}，RSI14=${value(o.indicators?.rsi14)}；原计划止损${o.stop}、目标${o.target}；机械状态${o.mechanical.status}。`);
+    for(const x of report.observations||[])lines.push(`- 观察记录 ${x.name}(${x.symbol})：${x.observation.label}；${x.observation.reason||'报价缺失需核验，不构成买入建议。'}${x.lastKnownQuote?`；旧价参考${value(x.lastKnownQuote.price)}，时间${(Number.isFinite(x.lastKnownQuote.asOf)?new Date(x.lastKnownQuote.asOf).toISOString():'未知（不可作时价）')}，不得替代实时价。`:''}`);
     if(report.coverage)lines.push(`研究范围：选择${report.coverage.selectedIndustryCount}个行业；来源目录共${report.coverage.marketIndustryCount}项；目录${report.coverage.completeDirectory?'完整':'不完整，不代表全市场'}。`);
     if(report.coverage?.selection){const s=report.coverage.selection;lines.push(`账户倾向行业：${s.mode==='hot120'?'成交额前120':'手动选择'}；实际${s.selectedCount}个；来源${s.source}；快照读取${s.fetchedAt?new Date(s.fetchedAt).toISOString():'未确认'}。${s.basis}`);}
     for (const group of GROUPS) {
@@ -300,7 +304,7 @@
         lines.push(`- ${s.name}：${s.reason}`);
         lines.push(`  - 行业行情：涨跌${value(s.changePct)}%；资金流${value(s.flow)}元；来源${s.source||'未确认'}；抓取时间${s.fetchedAt?new Date(s.fetchedAt).toISOString():'未确认'}；证据${(s.newsIds||[]).join('、')}。`);
         for (const tier of TIERS) {
-          const stocks = s.stocks.filter(x => x.valueTier === tier);
+          const stocks = s.stocks.filter(x => x.valueTier === tier&&!x.observation?.allocationBlocked);
           lines.push(`  - ${tier}：${stocks.map(x => `${x.name}(${x.symbol}) ${x.valueReason || ''}`).join('；') || '无充分依据的候选'}`);
           for(const x of stocks){
             const q=x.quote||{},i=x.indicators||{};
@@ -331,6 +335,7 @@
   function imSummary(report,plan){
     const lines=[`${report.mode==='simulation'?'【模拟测试】':''}A股投研｜${report.id}`,`时间：${new Date(report.finishedAt).toISOString()}；状态：${report.status}`,'仅提供建议，不自动交易。',...(report.mode==='simulation'?['模拟资金、合成行情与资讯，不是真实账户或荐股。']:[]),report.summary||''];
     if(report.information?.length)lines.push(`资讯核验：${report.information.filter(x=>x.status==='supported').length}/${report.information.length}只通过本轮五类证据互核；有限范围核验，不代表无风险。`);
+    for(const x of report.observations||[])lines.push(`${x.name}(${x.symbol})：${x.observation.label}；${x.observation.reason||'缺报价需核验；不构成买入建议。'}`);
     if(report.coverage?.selection)lines.push(`研究范围：${report.coverage.selection.mode==='hot120'?'成交额前120':'手动倾向行业'}，实际${report.coverage.selectedIndustryCount}个；来源目录${report.coverage.marketIndustryCount}项，所选范围不代表全市场。`);
     if(report.allocation){const r=riskEstimate(report.allocation);lines.push(r.available?`建议仓位跌至止损参考价的估算损失合计${r.stopDistanceLoss}元（权益${round(r.equityFraction*100,2)}%）。`:'风险金额依据不足，先等待核验。',r.basis);}
     for(const f of report.scanFindings||[])lines.push(`${f.symbol}：${{consistent:'符合原计划',adjust:'需复查调整',insufficient:'证据不足'}[f.verdict]}；${f.reason}`);
@@ -339,7 +344,7 @@
     else for(const group of GROUPS){const rows=report.industries.filter(x=>x.group===group);lines.push(`${group}（${rows.length}）：${rows.map(x=>x.name).slice(0,15).join('、')||'无'}${rows.length>15?'等，详见完整报告':''}`);}
     if(report.industries.some(x=>x.assessment==='insufficient'))lines.push(`证据不足、未分组：${report.industries.filter(x=>x.assessment==='insufficient').length}个行业，详见附件；不计入不推荐行业。`);
     for(const s of report.industries.filter(s=>GROUPS.includes(s.group)&&s.group!=='不推荐行业').slice(0,6)){
-      lines.push(`${s.name}：`+TIERS.map(t=>`${t} ${s.stocks.filter(x=>x.valueTier===t).map(x=>x.name).slice(0,4).join('/')||'无充分依据候选'}`).join('；'));
+      lines.push(`${s.name}：`+TIERS.map(t=>`${t} ${s.stocks.filter(x=>x.valueTier===t&&!x.observation?.allocationBlocked).map(x=>x.name).slice(0,4).join('/')||'无充分依据候选'}`).join('；'));
     }
     for(const p of report.allocation?.positions||[])lines.push(`${p.name}：建议${round(p.weight*100,2)}%，参考金额${p.targetValue}元；止损${p.stop}，目标${p.target}。`);
     for(const p of (report.allocation?.positions||[]).filter(p=>p.weight>0).slice(0,3))lines.push(`${p.symbol} 考虑：${p.entryCondition||'历史条件未记录，先等待核验'}；等待：${p.waitCondition||'历史条件未记录'}；失效：${p.invalidationCondition||'历史条件未记录'}。`);

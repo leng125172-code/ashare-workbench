@@ -114,9 +114,19 @@ async function news(keyword) {
   return { rows:[...new Map(rows.filter(n => n.title).map(n=>[n.id,n])).values()].sort((a,b)=>(b.publishedMs || 0)-(a.publishedMs || 0)), warnings, fetchedAt:Date.now() };
 }
 async function assess(items, progress = ()=>{}) {
+  const missing=items.filter(x=>!C.quoteValid(x.quote,Date.now(),20));
+  let backup={},backupError=null;
+  if(missing.length){try{backup=await quotes(missing.map(x=>x.symbol));}catch(e){backupError=String(e.message||e).slice(0,180);}}
   const out = [];
   for (const item of items) {
     let s = { ...item, warnings:[] };
+    if(!C.quoteValid(item.quote,Date.now(),20)){
+      if(C.finite(item.quote?.price)&&item.quote.price>0){s.lastKnownQuote={...item.quote,usage:'dated_reference_only'};s.quote={...item.quote,price:null};}
+      const q=backup[item.symbol],valid=C.quoteValid(q,Date.now(),20);
+      s.quoteDiagnostics={state:valid?'recovered':'missing',reason:valid?'backup_quote_recovered':backupError?'backup_source_failed':q?'backup_quote_stale_or_invalid':'source_no_valid_price',primarySource:item.quote?.source||null,checkedAt:Date.now(),suspensionInferred:false};
+      if(valid){s.quote=q;s.warnings.push('行业列表缺报价，已通过备用源取得带实际时点的有效报价；不等于交易状态已核实。');}
+      else{if(q&&C.finite(q.price)&&q.price>0&&Number.isFinite(q.asOf)&&(!Number.isFinite(s.lastKnownQuote?.asOf)||q.asOf>s.lastKnownQuote.asOf))s.lastKnownQuote={...q,usage:'dated_reference_only'};s.warnings.push('缺少有效报价：'+s.quoteDiagnostics.reason+'；停复牌状态需官方公告核验，旧价格仅作带日期参考。');}
+    }
     try { const k = await kline(item.symbol); s.indicators = C.indicators(k.bars); s.klineSource=k.source; s.adjustment=k.adjustment; s.klineAsOf=k.bars.at(-1)?.date; s.warnings.push(...k.warnings); }
     catch { s.indicators={ready:false,count:0}; s.warnings.push('K线主备源不可用，未分档。'); }
     out.push(s); progress(out.length,items.length);

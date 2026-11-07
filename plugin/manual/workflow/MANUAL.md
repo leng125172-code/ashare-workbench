@@ -250,3 +250,12 @@ plan_control(action:performance_match,mode,requestKey,performance:{ledgerId,expe
 
 
 长批次增量协议2见[industry-parallel.md](industry-parallel.md)：显式refresh_context(incremental:true)，本行业token与最终全市场复核分离；证据不足可明确终态，不能强行分组。协议1已有说明仅适用于未启用协议2的研究。
+
+
+## 停复牌观察（0.18）
+
+行业成员≠投资候选，价值分档≠买入指令。缺报价先读quoteDiagnostics并核对备用源；lastKnownQuote仅作带日期参考，不能从无报价/停更K线推断停牌。
+
+先stock_detail(view:information, runId, symbol)保存同公司资料包，读取announcements.rows的具体原文URL及publishedAt；stock_detail(view:source)保存同URL原文字节指纹。add_evidence的announcement/full_text_reviewed可带tradingEvent:{state:suspended或resumed,effectiveDate:YYYY-MM-DD,basis:正文依据}，发布时间与官方列表须精确一致。不能使用目录页或另一公司的PDF。随后真实独立代理按证据fingerprint进行双人正文互核；事件不代替其余四类证据。
+
+停牌及未知/冲突状态为观察对象，阻止正权重配置；不自动改动账户和原有计划。同模式跨轮/重启继承原证据、指纹、时间与全部复核，不续期，不因报价恢复或证据过期移除。相同生效日/发布时间的相反事件须继续核验。复牌事件须有效且双核验，重新分派分析的recordedAt及最终报价asOf均晚于复核边界；旧判断不自动恢复。每日扫描继承已知事件并提示复查，不自动交易；历史报告保留原冻结结论。

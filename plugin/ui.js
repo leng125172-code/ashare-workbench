@@ -130,14 +130,15 @@ async function readReport(){
     $('#report-text').textContent=report.markdown;
     row($('#report-summary'),report.summary,`${report.status==='completed'?(report.planChanged?'本轮修订计划':'本轮维持计划'):report.status==='proposal_only'?'本轮建议待采用':'本轮研究未完成'} · ${at(report.finishedAt)}`);
     for(const x of report.information||[])row($('#report-summary'),x.symbol+' · 资讯核验',x.status==='supported'?'本轮五类证据已互核；有限范围，不代表无风险。':(x.issues||[]).join('；'));
+    for(const x of report.observations||[])row($('#report-summary'),x.name+' · '+x.symbol,x.observation.label+'；'+(x.observation.reason||'缺报价不推断停牌，需核对官方状态。'));
     const group=$('#industry-groups');
     for(const name of ['主投行业','二级投资行业','三级投资行业','不推荐行业']){
       group.append(el('h2',name,'group-title'));const industries=(report.industries||[]).filter(s=>s.group===name);
       if(!industries.length)group.append(el('p','本轮暂无充分依据的行业。','muted'));
       for(const s of industries){const card=el('article',undefined,'industry');card.append(el('h3',s.name),el('p',s.reason),el('small',s.coverage||''));if(s.analysis?.method==='subagent')card.append(el('p','子代理分工分析 · 主代理汇总核验','fine-print'));
-        for(const tier of ['一档','二档','三档']){const d=el('div',undefined,'tier');d.append(el('strong',tier));const stocks=s.stocks.filter(x=>x.valueTier===tier);
+        for(const tier of ['一档','二档','三档']){const d=el('div',undefined,'tier');d.append(el('strong',tier));const stocks=s.stocks.filter(x=>x.valueTier===tier&&!x.observation?.allocationBlocked);
           if(!stocks.length)d.append(el('p','暂无充分依据的候选。','muted'));
-          for(const x of stocks){const list=el('div',undefined,'security-row'),body=el('div'),metric=el('div',undefined,'security-metric');body.append(el('h3',x.name),el('span',x.symbol,'security-code'),el('p',x.valueReason));metric.append(el('strong',fmt(x.technicalScore??x.score,1)),el('small','技术筛选分'));list.append(body,metric);d.append(list);}card.append(d);
+          for(const x of stocks){const list=el('div',undefined,'security-row'),body=el('div'),metric=el('div',undefined,'security-metric');body.append(el('h3',x.name),el('span',x.symbol,'security-code'),el('p',x.observation?.label||'投资候选（非买入指令）','muted'),el('p',x.valueReason));metric.append(el('strong',fmt(x.technicalScore??x.score,1)),el('small','技术筛选分'));list.append(body,metric);d.append(list);}card.append(d);
         }if(s.ungraded)card.append(el('p',`${s.ungraded}只未充分评估，未强行分档。`,'muted'));group.append(card);
       }
     }
@@ -157,11 +158,12 @@ async function loadStock(){
     const hasBars=Array.isArray(chart.bars)&&chart.bars.length>0;
     $('#stock-empty').hidden=hasBars;$('#kline').hidden=!hasBars;$('#market-legend').hidden=!hasBars;$('#stock-news-card').hidden=false;renderDashboard();$('#send-stock').disabled=onMobile||!hasBars||!state?.config?.partnerTarget;
     if(!hasBars)AShareFeedback.render($('#stock-empty'),{title:'本次没有可绘制的K线',description:'当前来源未返回有效K线。下面保留本次实际取得的公司资料与来源说明。',retry:()=>loadStock(),retryLabel:'重新查询'});
-    $('#stock-meta').textContent=`${chart.quote?.name||symbol} · 未复权现价 ${fmt(chart.quote?.price)} · 报价时间 ${at(chart.quote?.asOf)}；K线 ${chart.source}/${chart.adjustment}，末根 ${chart.bars?.at(-1)?.date||'无'}。`;
+    $('#stock-meta').textContent=`${chart.quote?.name||symbol} · 未复权行情参考价 ${fmt(chart.quote?.price)} · 报价时间 ${at(chart.quote?.asOf)}；K线 ${chart.source}/${chart.adjustment}，末根 ${chart.bars?.at(-1)?.date||'无'}。`;
     if(hasBars)draw();const i=chart.indicators;if(i?.ready)for(const [label,v]of [['MA5',i.ma5],['MA20',i.ma20],['MA60',i.ma60],['RSI14',i.rsi14],['MACD柱',i.macd.histogram],['ATR14',i.atr14]])stat($('#indicators'),label,fmt(v));
     if(chart.information)renderInformation(chart.information,chart.informationSources||[]);
     for(const n of (chart.news||[]).slice(0,12))row($('#stock-news'),n.title,`${n.source} · ${n.publishedAt||'时间未确认'}`);
     if(!chart.information&&!(chart.news||[]).length)AShareFeedback.render($('#stock-news'),{title:'本次未取得公司资料',description:'未查到数据不代表没有公告或风险。请通过公司披露来源继续核验。'});
+    row($('#stock-news'),'研究阶段',chart.researchNotice||'单股资料查询，不代表已评为值得买。');
     if(chart.warnings?.length)row($('#stock-news'),'本次资料提示',chart.warnings.join('；'));
     if(matchMedia('(max-width:650px)').matches&&!$('#stock').hidden&&Math.abs(scrollY-queryScroll)<96)requestAnimationFrame(()=>document.querySelector('.chart-card').scrollIntoView({block:'start',behavior:'auto'}));
   }catch(e){if(generation!==stockGeneration||mode!==$('#data-mode').value)return;resetStock();$('#stock-meta').textContent='当前查询未完成，暂未展示价格或K线。';AShareFeedback.render($('#stock-empty'),{kind:'error',title:'行情暂时未能读取',description:'未沿用上一只股票的图表。请检查代码，或稍后重新查询。',detail:e.message,retry:()=>loadStock(),retryLabel:'重新查询'});throw e;}
