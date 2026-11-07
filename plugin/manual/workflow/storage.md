@@ -83,3 +83,12 @@ get_research的目录、股票、资讯、资料覆盖及派工清单支持offse
 行业资讯用`view:'news',sectorId`分页；任务中newsReadRequest指向该清单，freshNewsIds说明本页时效可用ID。allowedNewsIds只覆盖当前任务实际提供的资讯页，其他引用须先读取对应页。资料包按股票-行业归属分页，totalDossiers是全run资料包数，pageDossierCount是本页实际返回数。
 
 主代理须先固定并读完待派工清单再分发/写入，不能在已提交行业导致pending清单缩短后沿旧offset跳过行业。期间输入证据变化仍按0.12指纹规则重新分工。
+# 缺失失败归档的精确恢复
+
+`record_failure` 先固化失败提交意图，写入并读回完整报告及原研究归档，再提交终态索引。归档写失败不报成功；同一请求键、参数和原版本可在重启后续接，保留首次报告时刻。状态改变时停止对账，不能覆盖新资料。
+
+旧版本若出现失败索引存在、实际归档 `NOT_FOUND`，先停止研究写入和清理。`plan_control(action:failure_archive_preview)` 的 `failureRecovery` 须明确 runId、expectedRevision、原行业/股票/判断数量、排序后的完整 judgments 摘要、原 config 摘要，以及已保存原生 contextToken 和 contextCheckedAt。摘要均为 JSON.stringify 对应对象的 UTF-8 SHA256；judgments 使用按行业 ID 排序的 `[id, judgment]` 数组。contextCheckedAt 只用于核对原生历史指纹，不续期分析、资讯或监管回执。
+
+预览按原生 run_record 扫描页返回 nextOffset，每页最多32条；读至 null 后核对全部匹配候选，明确选定 runRecordHash 和 previewToken，再用稳定请求键调用 `failure_archive_recover`。摘要不是时间顺序，不能自动选择最大 SHA。接口只加载当前模式中已校验的不可变原生记录，不接受调用方传入 run，不回滚账户/计划/动作或重开研究。当前只支持原失败报告未关联计划的缺档；无法确定旧计划快照时拒绝恢复。
+
+恢复写入并读回完整原研究，只修复该失败索引的范围及恢复来源标记。原失败报告从未落盘时，正文由原生索引重建并明确标记，不能称逐字恢复原报告。不同已有归档、版本/摘要/模式不符或缺失引用均拒绝；同键重试不重复报告、调度或 IM。原送达/失败/不确定动作保留，不自动发送。

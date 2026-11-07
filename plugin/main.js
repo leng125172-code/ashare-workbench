@@ -85,6 +85,7 @@ function newsIds(r) {return new Set(r.news.map(n=>n.id));}
 function usableNews(r,c) {const now=Date.now();return r.news.filter(n=>Number.isFinite(n.publishedMs)&&n.publishedMs<=now+60000&&now-n.publishedMs<=c.newsMaxAgeHours*3600000);}
 async function archive(path,data){const r=await library({op:'write',path,content:JSON.stringify(data)});if(!r.ok)throw new Error(r.message||'归档失败，未提交状态。');}
 async function immutableArchive(path,data){const old=await library({op:'read',path});const content=JSON.stringify(data);if(old.ok){if(old.content!==content)C().fail('ARCHIVE_CONFLICT','不可覆盖不同归档。');return;}if(old.errorCode!=='NOT_FOUND')C().fail('ARCHIVE_READ','无法确认归档。');await archive(path,data);}
+async function verifiedArchive(path,data){await immutableArchive(path,data);const read=await library({op:'read',path});if(!read.ok||read.content!==JSON.stringify(data))C().fail('ARCHIVE_VERIFY','归档写入后读回不一致，未提交成功索引。');}
 async function readAdvice(s,reportId){if(!/^[a-zA-Z0-9_-]{3,120}$/.test(reportId||''))C().fail('ADVICE_ID','建议ID无效。');const r=await library({op:'read',path:'advice/'+reportId+'.json'});if(!r.ok)C().fail('ADVICE_NOT_FROZEN','仅支持0.5起已冻结建议，不回填旧报告。');const x=JSON.parse(r.content);if(await signatureHash(x.canonical)!==x.sha256||JSON.stringify(x.snapshot)!==x.canonical)C().fail('ADVICE_INTEGRITY','建议档案摘要不一致。');return {...x.snapshot.report,adviceSha256:x.sha256,snapshot:x.snapshot,canonical:x.canonical};}
 async function sealPerformance(j){j.integrity=await signatureHash(JSON.stringify({...j,integrity:undefined}));}
 async function verifyPerformance(j){if(!j||await signatureHash(JSON.stringify({...j,integrity:undefined}))!==j.integrity)C().fail('PERFORMANCE_INTEGRITY','效果账本摘要不一致。');}
@@ -330,6 +331,39 @@ async function storageCleanupExecute(a){
 }
 
 let industryCatalogCache={};
+async function recordFailure(a){
+ const s=await stateReady(),signature=JSON.stringify(a),prior=await requestCheck(s,a.requestKey,signature);if(prior)return prior;
+ const commitPath='failure-commits/'+await signatureHash(a.requestKey)+'.json',saved=await library({op:'read',path:commitPath});let tx;
+ if(saved.ok){tx=JSON.parse(saved.content);if(tx.signature!==await signatureHash(signature)||tx.expectedRevision!==s.revision)C().fail('FAILURE_RECONCILE','失败归档提交意图与请求或状态版本不符，停止覆盖。');}
+ else{
+  if(saved.errorCode!=='NOT_FOUND')C().fail('ARCHIVE_READ','失败归档意图无法核对。');const run=a.runId?lookup(s,a.runId):null;if(run&&(run.archivePath||['completed','failed','cancelled'].includes(run.status)))C().fail('RUN_CLOSED','不能改写已结束研究；缺失归档须用精确恢复接口。');
+  const now=Date.now(),plan=active(s),report={mode:selectedMode,id:run?.id||id('failed'),finishedAt:now,trigger:a.trigger||run?.trigger||'研究异常',summary:String(a.message||'本轮未完成，保留原计划。'),industries:[],allocation:null,planId:plan?.id||null,planSnapshot:plan?clone(plan):null,planChanged:false,status:'failed',news:run?.news||[],warnings:['本轮未完成分析；实际持仓与原投资计划未改写。']};report.markdown=C().reportMarkdown(report,plan);
+  tx={signature:await signatureHash(signature),expectedRevision:s.revision,archivePath:'reports/'+report.id+'.json',archive:clone({report,run,plan})};await verifiedArchive(commitPath,tx);
+ }
+ return once(a.requestKey,signature,async d=>{await verifiedArchive(tx.archivePath,tx.archive);const {report,run,plan}=tx.archive;d.reports.push({id:report.id,finishedAt:report.finishedAt,summary:report.summary,planId:report.planId,status:'failed',archivePath:tx.archivePath});if(run)d.runs=d.runs.map(x=>x.id===run.id?{id:run.id,status:'failed',startedAt:run.startedAt,archivePath:tx.archivePath,sectorCount:run.sectors?.length||0,stockCount:Object.keys(run.stocks||{}).length}:x);for(const format of ['text','file'])d.actions.push({id:report.id+'.wechat.'+format,operation:'send_report',format,provider:'wechat-clawbot',reportId:report.id,planId:plan?.id||null,status:'pending',createdAt:report.finishedAt});return {reportId:report.id,status:'failed',actionIds:d.actions.filter(x=>x.reportId===report.id).map(x=>x.id)};});
+}
+function failureRecoveryTarget(s,p){
+ if(!p||!/^[a-zA-Z0-9_-]{3,120}$/.test(p.runId||'')||p.expectedRevision!==s.revision)C().fail('REVISION_CONFLICT','恢复须明确研究及当前版本。');
+ if(!Number.isInteger(p.expectedJudgmentCount)||p.expectedJudgmentCount<1||!Number.isInteger(p.expectedSectorCount)||p.expectedSectorCount!==p.expectedJudgmentCount||!Number.isInteger(p.expectedStockCount)||p.expectedStockCount<1||['expectedJudgmentsSha256','expectedConfigSha256','expectedContextToken'].some(k=>!/^[a-f0-9]{64}$/.test(p[k]||'')))C().fail('FAILURE_RECOVERY_PROOF','须提供已核对的完整行业/股票范围及原生摘要。');
+ const run=lookup(s,p.runId),reports=s.reports.filter(x=>x.id===p.runId),path='reports/'+p.runId+'.json';if(run.status!=='failed'||run.archivePath!==path||reports.length!==1||reports[0].status!=='failed'||reports[0].archivePath!==path)C().fail('FAILURE_RECOVERY_TARGET','仅修复失败研究的缺失报告归档，不重开研究。');
+ const report=reports[0];if(report.planId!=null)C().fail('FAILURE_RECOVERY_PLAN','原计划快照未落盘，无法安全重建；保留故障，不猜测计划版本。');if(!Number.isFinite(p.contextCheckedAt)||p.contextCheckedAt<run.startedAt||p.contextCheckedAt>report.finishedAt)C().fail('FAILURE_RECOVERY_PROOF','历史指纹核对时刻须位于原研究及失败提交之间，不续期任何证据。');return {run,report,path};
+}
+function recoveryMetadataMatches(m,p){return m&&m.sectorCount===p.expectedSectorCount&&m.stockCount===p.expectedStockCount&&m.judgmentCount===p.expectedJudgmentCount&&m.judgmentsSha256===p.expectedJudgmentsSha256&&m.configSha256===p.expectedConfigSha256;}
+async function failureRecoveryToken(s,p,m){return signatureHash(JSON.stringify({mode:selectedMode,revision:s.revision,rootSha256:stateRootHashes[selectedMode],target:failureRecoveryTarget(s,p),proof:p,record:m}));}
+async function recoveredContextToken(run,p){return Inc().enabled(run)?Inc().reviewToken(run,selectedMode,signatureHash,I(),p.contextCheckedAt):researchContextToken(run);}
+async function failureArchivePreview(a){
+ const s=await stateReady(),p=a.failureRecovery,target=failureRecoveryTarget(s,p);if(!repositoryModes.has(selectedMode))C().fail('REPOSITORY_MIGRATION_REQUIRED','缺失原生仓储记录，不用调用方资料重建。');const existing=await library({op:'read',path:target.path});if(existing.ok)C().fail('ARCHIVE_EXISTS','归档已存在，停止缺档恢复；先核对原档。');if(existing.errorCode!=='NOT_FOUND')C().fail('ARCHIVE_READ','原归档读取状态不明，停止恢复。');
+ const page=await repository().runRecordCandidates({runId:p.runId,judgmentCount:p.expectedJudgmentCount},{offset:p.offset||0,limit:p.limit||32}),items=[];
+ for(const m of page.items)if(recoveryMetadataMatches(m,p)){const run=await repository().loadRunRecord(m.runRecordHash);if(await recoveredContextToken(run,p)!==p.expectedContextToken)continue;const proof={...p};delete proof.offset;delete proof.limit;items.push({...m,previewToken:await failureRecoveryToken(s,proof,m)});}
+ return {runId:p.runId,mode:selectedMode,expectedRevision:s.revision,offset:page.offset,nextOffset:page.nextOffset,candidates:items,note:'分页遍历全部候选后显式选择原生引用；摘要没有时间顺序，不自动取最大SHA。仅恢复缺档，保留失败状态及原动作。'};
+}
+async function failureArchiveRecover(a){
+ const s=await stateReady(),signature=JSON.stringify(a),prior=await requestCheck(s,a.requestKey,signature);if(prior)return prior;const p=a.failureRecovery,target=failureRecoveryTarget(s,p);if(!repositoryModes.has(selectedMode)||!/^[a-f0-9]{64}$/.test(p.runRecordHash||'')||!/^[a-f0-9]{64}$/.test(p.previewToken||''))C().fail('FAILURE_RECOVERY_PROOF','先读原生恢复预览并提供确切引用。');
+ const run=await repository().loadRunRecord(p.runRecordHash),m={runRecordHash:p.runRecordHash,runId:run.id,status:run.status,startedAt:run.startedAt,analysisAsOf:run.analysisAsOf,contextRefreshedAt:run.contextRefreshedAt,sectorCount:run.sectors?.length||0,stockCount:Object.keys(run.stocks||{}).length,judgmentCount:Object.keys(run.judgments||{}).length,judgmentsSha256:await signatureHash(JSON.stringify(Object.keys(run.judgments||{}).sort().map(k=>[k,run.judgments[k]]))),configSha256:await signatureHash(JSON.stringify(run.config))};
+ if(run.id!==p.runId||run.archivePath||!['collected','judging'].includes(run.status)||!recoveryMetadataMatches(m,p)||await recoveredContextToken(run,p)!==p.expectedContextToken)C().fail('FAILURE_RECOVERY_MISMATCH','原生记录与已核对范围/摘要不符，未写归档。');const proof={...p};delete proof.runRecordHash;delete proof.previewToken;delete proof.offset;delete proof.limit;if(await failureRecoveryToken(s,proof,m)!==p.previewToken)C().fail('FAILURE_RECOVERY_STALE','预览或状态版本已变化，未恢复。');
+ const recovery={kind:'reconstructed_missing_failure_archive',sourceRunRecordHash:p.runRecordHash,judgmentsSha256:m.judgmentsSha256,contextToken:p.expectedContextToken,contextCheckedAt:p.contextCheckedAt,expectedRevision:s.revision,requestKey:a.requestKey,note:'完整研究来自已校验原生不可变记录；失败报告从原生索引重建，原失败trigger未落盘，不冒称原报告逐字恢复。历史核对时刻仅验证指纹，不续期或重开研究。'},report={mode:selectedMode,id:target.report.id,finishedAt:target.report.finishedAt,trigger:'缺失失败归档恢复（原触发字段未落盘）',summary:target.report.summary,industries:[],allocation:null,planId:null,planSnapshot:null,planChanged:false,status:'failed',news:run.news||[],warnings:['本轮未完成分析；实际持仓与原投资计划未改写。',recovery.note],recovery};report.markdown=C().reportMarkdown(report,null);const body={report,run,plan:null,recovery};
+ return once(a.requestKey,signature,async d=>{await verifiedArchive(target.path,body);const index=d.runs.find(x=>x.id===p.runId);index.sectorCount=m.sectorCount;index.stockCount=m.stockCount;index.archiveRecovery=clone(recovery);d.reports.find(x=>x.id===p.runId).archiveRecovery=clone(recovery);return {recovered:true,runId:p.runId,status:'failed',archivePath:target.path,sectorCount:m.sectorCount,stockCount:m.stockCount,judgmentCount:m.judgmentCount,sourceRunRecordHash:p.runRecordHash,reconstructedReport:true};});
+}
 let historyResetAdapter;
 function resetAccountConfig(state){return state.config?{...clone(state.config),industrySelectionMode:state.config.industrySelectionMode||(state.config.industryIds?.length?'manual':'hot120')}:null;}
 function historyReset(){return historyResetAdapter||(historyResetAdapter=globalThis.AShareHistoryReset.create({
@@ -561,17 +595,7 @@ const handlers={
       const body={requestKey:a.requestKey,signature:await signatureHash(signature),expectedRevision:d.revision,draft:clone(d),advice:adviceEnvelope,reportArchive,result};await immutableArchive('advice-commits/'+report.id+'.json',{body,sha256:await signatureHash(JSON.stringify(body))});await immutableArchive(advicePath,adviceEnvelope);await immutableArchive(archivePath,reportArchive);return result;
     }).then(async result=>{await syncMonitor(await stateReady());return result;});
   },
-  record_failure:async a=>once(a.requestKey,JSON.stringify(a),async d=>{
-    const run=a.runId?lookup(d,a.runId):null;
-    if(run?.status==='completed')C().fail('RUN_CLOSED','不能将已完成研究改写成失败。');
-    const now=Date.now(),plan=active(d),report={mode:selectedMode,id:run?.id||id('failed'),finishedAt:now,trigger:a.trigger||run?.trigger||'研究异常',summary:String(a.message||'本轮未完成，保留原计划。'),
-      industries:[],allocation:null,planId:plan?.id||null,planSnapshot:plan?clone(plan):null,planChanged:false,status:'failed',news:run?.news||[],warnings:['本轮未完成分析；实际持仓与原投资计划未改写。']};
-    report.markdown=C().reportMarkdown(report,plan);const archivePath='reports/'+report.id+'.json',reportArchive=clone({report,run,plan});
-    d.reports.push({id:report.id,finishedAt:now,summary:report.summary,planId:report.planId,status:'failed',archivePath});
-    if(run)d.runs=d.runs.map(x=>x.id===run.id?{id:run.id,status:'failed',startedAt:run.startedAt,archivePath}:x);
-    for(const format of ['text','file'])d.actions.push({id:report.id+'.wechat.'+format,operation:'send_report',format,provider:'wechat-clawbot',reportId:report.id,planId:plan?.id||null,status:'pending',createdAt:now});
-    return {reportId:report.id,status:'failed',actionIds:d.actions.filter(x=>x.reportId===report.id).map(x=>x.id)};
-  }),
+  record_failure:async a=>recordFailure(a),
   stock_detail:async(a,callId)=>{
     const s=await stateReady();
     if(a.view==='refresh_analysis'){
@@ -629,6 +653,8 @@ const handlers={
     if(a.action==='storage_cleanup_preview')return storageCleanupPreview();
     if(a.action==='storage_cleanup_execute')return storageCleanupExecute(a);
     if(a.action==='storage_archive_completed')return storageArchiveCompleted(a);
+    if(a.action==='failure_archive_preview')return failureArchivePreview(a);
+    if(a.action==='failure_archive_recover')return failureArchiveRecover(a);
     if(a.action==='storage_migrate'){
       const s=await stateReady(),signature=JSON.stringify(a),prior=await requestCheck(s,a.requestKey,signature);if(prior)return {...prior,storage:storageMeta[selectedMode]};
       storageRevision(s,a);forceRepositoryModes.add(selectedMode);try{const r=await once(a.requestKey,signature,d=>({migrated:true,previousRevision:d.revision,revision:d.revision+1,runIds:d.runs.map(x=>x.id)}));return {...r,storage:storageMeta[selectedMode]};}finally{forceRepositoryModes.delete(selectedMode);}

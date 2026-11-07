@@ -1104,7 +1104,7 @@
     },
     {
       "name": "plan_control",
-      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。",
+      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。 failure_archive_preview/recover仅按原生不可变记录和版本/范围/摘要修复缺失失败归档，失败状态及外部动作保留。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1155,7 +1155,9 @@
               "storage_cleanup_preview",
               "storage_cleanup_execute",
               "reset_history_preview",
-              "reset_history"
+              "reset_history",
+              "failure_archive_preview",
+              "failure_archive_recover"
             ]
           },
           "reason": {
@@ -1480,6 +1482,75 @@
           "previewToken": {
             "type": "string",
             "description": "reset_history_preview当前预览token。清历史前已由用户明确授权并完成库外备份/停止研究；本字段只防竞态，不代替授权。"
+          },
+          "failureRecovery": {
+            "type": "object",
+            "description": "仅从当前模式原生不可变run_record精确修复缺失失败归档，不接收调用方run，不回滚账户或重开研究。preview须分页读全后明确引用；contextCheckedAt只核验历史指纹，不续期。",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "expectedRevision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "expectedSectorCount": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "expectedStockCount": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "expectedJudgmentCount": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "expectedJudgmentsSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "expectedConfigSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "expectedContextToken": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "runRecordHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "previewToken": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "contextCheckedAt": {
+                "type": "number"
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              }
+            },
+            "required": [
+              "runId",
+              "expectedRevision",
+              "expectedSectorCount",
+              "expectedStockCount",
+              "expectedJudgmentCount",
+              "expectedJudgmentsSha256",
+              "expectedConfigSha256",
+              "expectedContextToken",
+              "contextCheckedAt"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
