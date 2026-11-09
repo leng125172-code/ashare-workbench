@@ -71,4 +71,6 @@ npm run test:cindy
 
 目录：`plugin/` Cindy 插件及共享业务模块；`dsh/` 平台适配；`skill/` Cindy 工作流参考；`tests/` 离线与集成验收；`scripts/` 通用历史研究算法。运行数据、账户、备份和包产物不进入 Git。
 
+本地 Node 核验可用 [资源保护启动器](docs/audit-resource-guard.md) 限制整个进程组的内存、运行时间与输出，并阻止同脚本重复启动；它独立于插件运行时，不更改 Cindy 的全局限制。
+
 本项目采用 MIT 许可证，保留 [第三方来源及许可](plugin/THIRD_PARTY_NOTICES.md)。公开行情接口可用性和字段可能变化；公开接口可访问性不等于数据再分发或商业授权。
