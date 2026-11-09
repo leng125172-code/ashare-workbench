@@ -77,7 +77,8 @@ def run_unit(a, script, node, unit, runtime):
         cmd = ['systemd-run', '--user', '--wait', '--pipe', '--quiet', '--unit=' + unit]
         props = {'Description': description, 'MemoryMax': str(a.memory_mib * 1048576), 'MemorySwapMax': '0', 'OOMPolicy': 'kill',
                  'MemoryAccounting': 'yes', 'KillMode': 'control-group', 'TasksMax': '32',
-                 'RuntimeMaxSec': str(a.seconds), 'TimeoutStopSec': '1', 'NoNewPrivileges': 'yes'}
+                 'RuntimeMaxSec': str(a.seconds), 'TimeoutStopSec': '1', 'NoNewPrivileges': 'yes',
+                 'WorkingDirectory': str(pathlib.Path.cwd()), 'LimitCORE': '0'}
         cmd += ['--property=' + k + '=' + v for k, v in props.items()]
         cmd += [sys.executable, str(pathlib.Path(__file__).resolve()), '--worker', '--ready', str(ready),
                 '--nonce', nonce, '--node', node, '--memory-mib', str(a.memory_mib), '--heap-mib',

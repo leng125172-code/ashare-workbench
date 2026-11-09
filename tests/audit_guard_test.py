@@ -23,6 +23,11 @@ class GuardTests(unittest.TestCase):
   direct=subprocess.run(['node',str(p)],capture_output=True,text=True);self.assertEqual(direct.returncode,78)
   for _ in range(2):
    r,d=self.run_guard(p);self.assertEqual(r.returncode,0,d);self.assertTrue(d['limitsVerified']);self.assertIn('ok',d['stdoutTail']);self.assertEqual(d['limits']['memory.swap.max'],'0')
+ def test_working_directory_and_core_limit_are_preserved(self):
+  (self.base/'input.txt').write_text('relative-input-ok')
+  p=self.script('relative.cjs',"const fs=require('node:fs');console.log(fs.readFileSync('input.txt','utf8'));const row=fs.readFileSync('/proc/self/limits','utf8').split('\\n').find(x=>x.startsWith('Max core file size'));if(!/^Max core file size\\s+0\\s+0\\s+bytes$/.test(row.trim()))throw Error('CORE_DUMP_LIMIT_NOT_ZERO');")
+  r=subprocess.run(self.cmd(p),cwd=self.base,capture_output=True,text=True,timeout=20);d=json.loads(r.stdout or r.stderr)
+  self.assertEqual(r.returncode,0,d);self.assertEqual(d['reason'],'COMPLETED');self.assertIn('relative-input-ok',d['stdoutTail'])
  def test_external_memory_and_descendants_are_capped(self):
   p=self.script('memory.cjs',"const {spawn}=require('node:child_process'); const c=spawn(process.execPath,['-e',\"const a=[];setInterval(()=>a.push(Buffer.alloc(16*1024*1024,1)),5)\"],{stdio:'ignore'});console.log(c.pid);setInterval(()=>{},100);")
   r,d=self.run_guard(p);self.assertNotEqual(r.returncode,0,d);self.assertEqual(d['reason'],'MEMORY_LIMIT',d);self.assertTrue(d['limitsVerified']);self.assertGreater(int(d['metrics']['memory.peak']),0);self.assertLessEqual(int(d['metrics']['memory.peak']),160*1024*1024)
