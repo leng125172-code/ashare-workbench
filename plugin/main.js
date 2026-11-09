@@ -197,7 +197,7 @@ async function stockData(a,callId){
   const context=selectedMode==='simulation'?{scenario:a.scenario,asOf:a.asOf}:{};
   const [k,q,n]=await Promise.all([rpc('kline',{symbol:a.symbol,period:a.period||'day',...context},callId),rpc('quotes',{symbols:[a.symbol],...context},callId),rpc('news',{keyword:a.keyword||a.symbol.slice(-6),...context},callId)]);
   const dossier=selectedMode==='live'&&a.includeInformation!==false?await rpc('information',{symbol:a.symbol},callId):null;
-  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:a.period&&a.period!=='day'?null:C().indicators(k.bars),news:n.rows,warnings:[...k.warnings,...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
+  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:a.period&&a.period!=='day'?null:C().indicators(k.bars),news:n.rows,newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null,warnings:[...k.warnings,...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
 }
 function enqueueImages(d,report,plan,config){
   if(!plan||config?.sendKlineImages===false)return;
@@ -422,7 +422,7 @@ const handlers={
     return once(a.requestKey,JSON.stringify(a),d=>{
       const run={id:id('run'),startedAt:Date.now(),status:'collecting',trigger:String(a.trigger||'手动研究'),configRevision:d.revision,
         config:clone(d.config),sectors:selected,members:null,memberCursor:0,sectorCursor:0,stocks:{},industryData:{},judgments:{},news:news.rows,informationPolicy:1,dossiers:{},
-        warnings:[...sectors.warnings,...news.warnings],coverage:{marketIndustryCount:sectors.total,selectedIndustryCount:selected.length,completeDirectory:sectors.complete,selection}};
+        warnings:[...sectors.warnings,...news.warnings],newsCoverage:news.coverage||null,newsDiagnostics:news.diagnostics||null,coverage:{marketIndustryCount:sectors.total,selectedIndustryCount:selected.length,completeDirectory:sectors.complete,selection}};
       d.runs.push(run);return {runId:run.id,status:run.status,sectors:selected.map(x=>({id:x.id,name:x.name})),coverage:run.coverage};
     });
   },
@@ -435,7 +435,7 @@ const handlers={
       const sector=r.sectors[r.sectorCursor];
       if(!r.members){
         const [m,n]=await Promise.all([rpc('members',{sectorId:sector.id},callId),rpc('news',{keyword:sector.name},callId)]);
-        r.members=m.rows;r.memberCursor=0;r.industryData[sector.id]={total:m.total,complete:m.complete,fetchedAt:m.fetchedAt,warnings:[...m.warnings,...n.warnings]};
+        r.members=m.rows;r.memberCursor=0;r.industryData[sector.id]={total:m.total,complete:m.complete,fetchedAt:m.fetchedAt,warnings:[...m.warnings,...n.warnings],newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null};
         r.news=[...new Map([...r.news,...n.rows].map(n=>[n.id,n])).values()];
       }
       const batch=r.members.slice(r.memberCursor,r.memberCursor+Math.min(8,Math.max(1,Number(a.batchSize)||4)));
@@ -460,7 +460,7 @@ const handlers={
     if(a.view==='delegation')return delegationView(r,a);
     if(a.view==='revalidation')return revalidationView(r,a);
     if(a.view==='information'){const all=Object.values(r.stocks||{}).filter(x=>!a.sectorId||x.sectorId===a.sectorId),page=all.slice(offset,offset+limit),symbols=new Set(page.map(x=>x.symbol));return {runId:r.id,policyVersion:r.informationPolicy||0,sources:I().sources,dossiers:Object.fromEntries(Object.entries(r.dossiers||{}).filter(([symbol])=>symbols.has(symbol))),stocks:page.map(x=>informationCoverage(r,x.symbol,x.sectorId)),offset,totalStocks:all.length,totalDossiers:Object.keys(r.dossiers||{}).length,totalDossiersScope:'run',pageDossierCount:Object.keys(r.dossiers||{}).filter(symbol=>symbols.has(symbol)).length,nextOffset:offset+page.length<all.length?offset+page.length:null,note:'资料与覆盖按归属分页；须继续nextOffset读完，不把本页当作全目录。公告目录/聚合财务不等于原文互核。'};}
-    if(a.view==='news'){const sector=a.sectorId?r.sectors.find(x=>x.id===a.sectorId):null;if(a.sectorId&&!sector)C().fail('NOT_FOUND','行业不在本轮范围。');const rows=sector?(Inc().enabled(r)?Inc().scope(r,sector.id).news:r.news.filter(n=>n.sectorId===sector.id||n.keyword===sector.name||n.title.includes(sector.name))):r.news,page=rows.slice(offset,offset+limit),freshIds=new Set(usableNews(r,c).map(n=>n.id));return {runId:r.id,sectorId:sector?.id||null,news:page,total:rows.length,freshNewsIds:page.filter(n=>freshIds.has(n.id)).map(n=>n.id),nextOffset:offset+page.length<rows.length?offset+page.length:null,warnings:r.warnings};}
+    if(a.view==='news'){const sector=a.sectorId?r.sectors.find(x=>x.id===a.sectorId):null;if(a.sectorId&&!sector)C().fail('NOT_FOUND','行业不在本轮范围。');const rows=sector?(Inc().enabled(r)?Inc().scope(r,sector.id).news:r.news.filter(n=>n.sectorId===sector.id||n.keyword===sector.name||n.title.includes(sector.name))):r.news,page=rows.slice(offset,offset+limit),freshIds=new Set(usableNews(r,c).map(n=>n.id)),diagnostic=sector?r.industryData[sector.id]:r;return {runId:r.id,sectorId:sector?.id||null,news:page,total:rows.length,freshNewsIds:page.filter(n=>freshIds.has(n.id)).map(n=>n.id),nextOffset:offset+page.length<rows.length?offset+page.length:null,warnings:r.warnings,newsCoverage:diagnostic?.newsCoverage||null,newsDiagnostics:diagnostic?.newsDiagnostics||null};}
     if(a.sectorId){
       const sector=r.sectors.find(x=>x.id===a.sectorId);if(!sector)C().fail('NOT_FOUND','该批次未包含此行业。');
       const stocks=Object.values(r.stocks).filter(x=>x.sectorId===a.sectorId),graded=allResearchStocks(stocks,r),page=graded.slice(offset,offset+limit);
@@ -522,7 +522,7 @@ const handlers={
       if(a.rebaseSectorIds!==undefined&&(!Inc().enabled(run)||!Array.isArray(a.rebaseSectorIds)||!a.rebaseSectorIds.length||new Set(a.rebaseSectorIds).size!==a.rebaseSectorIds.length||a.rebaseSectorIds.some(id=>!run.sectors.some(x=>x.id===id))||Inc().dateCN(run.analysisAsOf)!==Inc().dateCN(Date.now())))C().fail('INVALID_SECTOR_REBASE','局部重建须已启用同日增量协议，行业ID完整有效且无重复。');
       if(run.sectors.some(x=>!map.has(x.id)))C().fail('INDUSTRY_MISSING','新目录缺少原研究行业，未替换原上下文。');
       run.sectors=run.sectors.map(x=>map.get(x.id));run.news=[...new Map([...run.news,...news.rows].map(n=>[n.id,n])).values()];
-      run.contextRefreshedAt=Date.now();run.contextEpoch=(run.contextEpoch||0)+1;run.latestMarketNewsIds=news.rows.map(n=>n.id);
+      run.contextRefreshedAt=Date.now();run.contextEpoch=(run.contextEpoch||0)+1;run.latestMarketNewsIds=news.rows.map(n=>n.id);run.newsCoverage=news.coverage||null;run.newsDiagnostics=news.diagnostics||null;
       if(a.rebaseAnalysis&&!Inc().enabled(run)&&!a.incremental)C().fail('INVALID_CONTEXT','rebaseAnalysis需先启用incremental协议。');
       if(a.rebaseAnalysis&&Inc().enabled(run)&&Inc().dateCN(run.analysisAsOf)!==Inc().dateCN(Date.now()))C().fail('STALE_ANALYSIS_DAY','跨日旧采集不可通过rebaseAnalysis续期；须重新取得新日分析数据。');
       const adopting=a.incremental&&!Inc().enabled(run),rebase=adopting||a.rebaseAnalysis;

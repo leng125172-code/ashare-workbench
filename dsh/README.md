@@ -6,18 +6,20 @@
 
 ## 安装
 
-已测试环境：Linux、Node.js `22.22.1`、DSH `0.2.1-rc.5`、sharp `0.35.5`。安装应使用当前包 `engines.dsh` 允许的版本；不要用版本豁免掩盖接口缺失。
+本轮已测试环境：Linux、Node.js `26.13.0`、DSH `0.2.1-rc.5`；此前亦验证过Node.js `22.22.1`。PNG依赖sharp（依赖范围见package.json）。安装应使用当前包 `engines.dsh` 允许的版本；不要用版本豁免掩盖接口缺失。
+
+0.18.3 与 Cindy 共用专项资讯检索修复及覆盖诊断：行业/公司名称/代码查询使用来源实际发布时间，合法空结果和接口失败分别报告。全文关键词命中不等于公司身份已核实，结果仍须原文和双人互核，不能把首屏8条当完整资料。
 
 本地已打包文件：
 
 ```sh
-dsh plugin --profile web add /绝对路径/dsh-plugin-ashare-workbench-0.18.2.tgz
+dsh plugin --profile web add /绝对路径/dsh-plugin-ashare-workbench-0.18.3.tgz
 ```
 
 在 npm **实际发布之后**，才可使用：
 
 ```sh
-dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.2
+dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.3
 ```
 
 `dsh plugin` 将包操作交给指定 profile 的包管理器，`add` 才是安装参数；不是 `plugin install` 或 `plugins install`。包的 `dsh.bundle` 加载 `dsh/cordis.patch.yml`，入口为根包导出的 `dsh-plugin-ashare-workbench/dsh`。该入口要求真实 `tools` 和 `profileContext` 服务，不能当普通浏览器脚本加载。

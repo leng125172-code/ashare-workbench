@@ -7,14 +7,15 @@ function get(url, gbk = false) {
   const u = new URL(url);
   if (u.protocol !== 'https:' || !ALLOWED.has(u.hostname) || u.port || u.username || u.password) throw new Error('数据源地址不在固定白名单。');
   return new Promise((resolve, reject) => {
-    const req = https.get(u, { headers: { 'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0', Accept:'application/json,text/plain,*/*', Referer:'https://finance.sina.com.cn/' } }, r => {
-      if (r.statusCode !== 200) { r.resume(); reject(new Error('数据源HTTP '+r.statusCode)); return; }
+    const referer=u.hostname==='search-api-web.eastmoney.com'?'https://so.eastmoney.com/':u.hostname.endsWith('.eastmoney.com')?'https://finance.eastmoney.com/':'https://finance.sina.com.cn/';
+    const req = https.get(u, { headers: { 'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0', Accept:'application/json,text/plain,*/*', Referer:referer } }, r => {
+      if (r.statusCode !== 200) { r.resume(); reject(Object.assign(new Error('数据源HTTP '+r.statusCode),{code:'HTTP_STATUS_ERROR',statusCode:r.statusCode})); return; }
       const parts = []; let bytes = 0;
       r.on('data', b => { bytes += b.length; if (bytes > 8*1024*1024) req.destroy(new Error('行情响应超过8MiB。')); else parts.push(b); });
       r.on('end', () => { try { const b = Buffer.concat(parts); resolve(gbk ? new TextDecoder('gb18030').decode(b) : b.toString('utf8')); } catch(e) { reject(e); } });
       r.on('error', reject);
     });
-    req.setTimeout(9000, () => req.destroy(new Error('行情数据源超时。'))); req.on('error', reject);
+    req.setTimeout(9000, () => req.destroy(Object.assign(new Error('行情数据源超时。'),{code:'DATA_SOURCE_TIMEOUT'}))); req.on('error', reject);
   });
 }
 async function json(url) {
@@ -90,28 +91,58 @@ async function kline(code, period = 'day') {
   }
 }
 async function news(keyword) {
-  const rows = [], warnings = [];
-  const attempts = await Promise.allSettled([
-    json('https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=60&zhibo_id=152&tag_id=0&dire=f&dpc=1').then(d => {
-      const feed = d.result?.data?.feed?.list; if (!Array.isArray(feed)) throw new Error('新浪资讯结构不完整。');
-      for (const n of feed) { let ext={}; try { ext=JSON.parse(n.ext || '{}'); } catch {} rows.push({ id:'sina-'+n.id, title:text(n.rich_text).slice(0,700), source:'sina', publishedAt:n.create_time, publishedMs:timeCN(n.create_time), url:n.docurl || ext.docurl || 'https://finance.sina.com.cn/', fetchedAt:Date.now() }); }
-    }),
-    json('https://np-listapi.eastmoney.com/comm/web/getFastNewsList?client=web&biz=web_724&fastColumn=102&sortEnd=&pageSize=60').then(d => {
-      if (!Array.isArray(d.data?.fastNewsList)) throw new Error('东财资讯结构不完整。');
-      for (const n of d.data.fastNewsList) rows.push({ id:'em-'+(n.code || n.realSort), title:text(n.title || n.summary).slice(0,700), source:'eastmoney', publishedAt:n.showTime, publishedMs:timeCN(n.showTime), url:n.url || 'https://kuaixun.eastmoney.com/', fetchedAt:Date.now() });
-    })
-  ]);
-  attempts.forEach((r,i) => { if(r.status==='rejected') warnings.push((i ? '东财':'新浪')+'资讯获取失败。'); });
-  if (keyword) {
-    try {
-      const param = { uid:'', keyword, type:['cmsArticleWebOld'], client:'web', clientType:'web', clientVersion:'curr', param:{ cmsArticleWebOld:{ searchScope:'default', sort:'default', pageIndex:1, pageSize:8, preTag:'', postTag:'' } } };
-      const d = await json('https://search-api-web.eastmoney.com/search/jsonp?param='+encodeURIComponent(JSON.stringify(param)));
-      const list = d.result?.cmsArticleWebOld || d.result?.data?.cmsArticleWebOld;
-      if (!Array.isArray(list)) throw new Error('检索资讯结构不完整。');
-      for (const n of list) rows.push({ id:'search-'+(n.code || n.url), title:text(n.title).slice(0,700), source:'eastmoney-search', publishedAt:n.date, publishedMs:timeCN(n.date), url:n.url || 'https://finance.eastmoney.com/', fetchedAt:Date.now(), keyword });
-    } catch { warnings.push('行业/股票专项资讯检索不可用，仅有市场快讯参考。'); }
+  const rows = [], warnings = [], sources = [];
+  let searchMeta=null;
+  const query=String(keyword||'').trim();
+  if(query.length>100)throw new Error('专项资讯关键词最多100字符。');
+  async function load(name,scope,fetchRows){
+    const requestedAt=Date.now();
+    try{
+      const items=await fetchRows();
+      rows.push(...items);
+      sources.push({source:name,scope,status:items.length?'ok':'empty',count:items.length,requestedAt,checkedAt:Date.now(),metadataOnly:true});
+    }catch(e){
+      const statusCode=Number.isInteger(e.statusCode)?e.statusCode:null;
+      const error=String(e.message||e).slice(0,180);
+      sources.push({source:name,scope,status:'failed',count:0,requestedAt,checkedAt:Date.now(),metadataOnly:true,errorCode:e.code||'DATA_SOURCE_ERROR',statusCode,error});
+      warnings.push((scope==='keyword'?'行业/股票专项资讯检索':name==='eastmoney'?'东财资讯':'新浪资讯')+'获取失败：'+error+'。');
+    }
   }
-  return { rows:[...new Map(rows.filter(n => n.title).map(n=>[n.id,n])).values()].sort((a,b)=>(b.publishedMs || 0)-(a.publishedMs || 0)), warnings, fetchedAt:Date.now() };
+  await Promise.all([
+    load('sina','market',async()=>{
+      const d=await json('https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=60&zhibo_id=152&tag_id=0&dire=f&dpc=1');
+      const feed=d.result?.data?.feed?.list;if(!Array.isArray(feed))throw new Error('新浪资讯结构不完整。');
+      return feed.map(n=>{let ext={};try{ext=JSON.parse(n.ext||'{}');}catch{}return {id:'sina-'+n.id,title:text(n.rich_text).slice(0,700),source:'sina',publishedAt:n.create_time,publishedMs:timeCN(n.create_time),url:n.docurl||ext.docurl||'https://finance.sina.com.cn/',fetchedAt:Date.now()};});
+    }),
+    load('eastmoney','market',async()=>{
+      const d=await json('https://np-listapi.eastmoney.com/comm/web/getFastNewsList?client=web&biz=web_724&fastColumn=102&sortEnd=&pageSize=60');
+      if(!Array.isArray(d.data?.fastNewsList))throw new Error('东财资讯结构不完整。');
+      return d.data.fastNewsList.map(n=>({id:'em-'+(n.code||n.realSort),title:text(n.title||n.summary).slice(0,700),source:'eastmoney',publishedAt:n.showTime,publishedMs:timeCN(n.showTime),url:n.url||'https://kuaixun.eastmoney.com/',fetchedAt:Date.now()}));
+    }),
+    ...(query?[load('eastmoney-search','keyword',async()=>{
+      // Contract observed in Eastmoney's own search_main.js/searchZiXun:
+      // explicit JSONP callback and nonempty em tags; results remain metadata.
+      const param={uid:'',keyword:query,type:['cmsArticleWebOld'],client:'web',clientType:'web',clientVersion:'curr',param:{cmsArticleWebOld:{searchScope:'default',sort:'time',pageIndex:1,pageSize:8,preTag:'<em>',postTag:'</em>'}}};
+      const d=await json('https://search-api-web.eastmoney.com/search/jsonp?'+new URLSearchParams({cb:'jQueryAShareNews',param:JSON.stringify(param)}));
+      if(d.code!==undefined&&d.code!==0)throw Object.assign(new Error('专项检索服务返回错误：'+String(d.code)),{code:'SEARCH_RESPONSE_ERROR'});
+      const list=d.result?.cmsArticleWebOld||d.result?.data?.cmsArticleWebOld;
+      if(!Array.isArray(list))throw new Error('检索资讯结构不完整。');
+      if(list.length>8||(!list.length&&Number(d.hitsTotal)>0))throw new Error('检索首屏数量与请求或总量不一致。');
+      const reportedHits=(typeof d.hitsTotal==='number'||typeof d.hitsTotal==='string'&&d.hitsTotal.trim()!=='')&&Number.isFinite(Number(d.hitsTotal))?Number(d.hitsTotal):null;
+      searchMeta={queryKind:'fulltext_keyword',page:1,pageSize:8,sort:'time',reportedHits,complete:false,note:'仅按时间排序的首屏关键词结果，来源总量可能封顶；不代表行业/公司资讯、公告或五类正文完整覆盖。'};
+      return list.map(n=>{
+        const title=text(n.title).slice(0,700),snippet=text(n.content).slice(0,800),publishedMs=timeCN(n.date);
+        let url;try{url=new URL(n.url);if(url.protocol==='http:')url.protocol='https:';}catch{throw new Error('专项检索缺少有效文章URL。');}
+        if(!title||!Number.isFinite(publishedMs)||url.protocol!=='https:'||url.username||url.password||url.port||!(url.hostname==='eastmoney.com'||url.hostname.endsWith('.eastmoney.com'))||url.pathname==='/')throw new Error('专项检索文章标题、发布时间或来源URL无效。');
+        return {id:'search-'+(n.code||url.href),title,source:'eastmoney-search',publishedAt:n.date,publishedMs,url:url.href,fetchedAt:Date.now(),keyword:query,contentLevel:'metadata',summary:snippet,matchedIn:[...(title.includes(query)?['title']:[]),...(snippet.includes(query)?['snippet']:[])],relationVerified:false};
+      });
+    })]:[])
+  ]);
+  const market=sources.filter(s=>s.scope==='market'),specialized=sources.find(s=>s.scope==='keyword');
+  const coverage={market:market.every(s=>s.status==='failed')?'unavailable':market.some(s=>s.status==='failed')?'partial':'available',specialized:specialized?(specialized.status==='failed'?'unavailable':specialized.status==='empty'?'empty':'available'):'not_requested',keyword:query||null,metadataOnly:true};
+  if(specialized?.status==='failed')warnings.push('专项检索未完成；市场快讯不能替代行业/公司原文，不将失败解释为没有相关资讯。');
+  if(query)warnings.push('专项结果仅为全文关键词检索元数据，包含字面同名或代码误匹配的可能；须逐条核对公司/行业关联及原文，不替代五类证据互核。');
+  return {rows:[...new Map(rows.filter(n=>n.title).map(n=>[n.id,n])).values()].sort((a,b)=>(b.publishedMs||0)-(a.publishedMs||0)),warnings,fetchedAt:Date.now(),coverage,diagnostics:{sources,search:searchMeta}};
 }
 async function assess(items, progress = ()=>{}) {
   const missing=items.filter(x=>!C.quoteValid(x.quote,Date.now(),20));

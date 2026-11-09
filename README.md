@@ -44,12 +44,14 @@
 发布后的 npm 包名为 `dsh-plugin-ashare-workbench`；源码中包含 `dsh/cordis.patch.yml`。npm 包发布、社区审核与真正出现在插件中心需分别核对，源码仓库公开不代表已经上架。
 
 ```sh
-dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.2
+dsh plugin --profile web add dsh-plugin-ashare-workbench@0.18.3
 ```
 
 开发安装及工具/通道能力详见 [dsh 适配说明](dsh/README.md)。使用 `ashare_get_research(view:industry_catalog)` 查看范围，通过 `ashare_configure` 保存本平台账户，再按 `ashare_begin_research` → 分批采集 → 原文互核 → 只读行业分工 → 主代理保存/定稿推进。不要把模拟默认账户复制成真实资金。
 
 ## 证据、增量分析与维护
+
+0.18.3 修复行业、公司名称及代码的专项资讯检索，并保留每个资讯源的覆盖状态、HTTP错误和合法空结果。查询为按时间排序的首屏元数据，关键词匹配不等于公司身份或完整原文证据，详见[修复与验证记录](docs/news-search-0.18.3.md)。
 
 多行业研究使用当前引擎真实子代理，每行业一个只读任务，默认最多3并行，其他排队。行业结果由主代理串行保存；配仓、定稿、调度和消息也由主代理执行。无法派工时明确降级。
 
