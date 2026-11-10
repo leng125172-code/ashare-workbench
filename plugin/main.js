@@ -172,8 +172,8 @@ async function captureSource(url,callId){
     const r=await cindy.fetch({url,method:'GET',as:'text',timeoutMs:20000,callId});
     const contentType=String(r.headers?.['content-type']||'');
     if(!r.ok||r.status!==200||r.truncated||typeof r.body!=='string'||!/text|html|json/.test(contentType)||new TextEncoder().encode(r.body).byteLength>8*1024*1024)
-      C().fail('SOURCE_UNAVAILABLE','直连原文失败；宿主备用未取得完整文本正文：'+String(r.message||r.status||'响应不支持'));
-    return {url,fetchedAt:Date.now(),sha256:await signatureHash(r.body),hashBasis:'utf8-decoded-response',bytes:new TextEncoder().encode(r.body).byteLength,contentType,isPdf:false,textPreview:r.body.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1200),transport:'cindy.fetch',warning:'直连失败，使用宿主文本备用；SHA256针对宿主解码后的UTF8文本，不是传输原始字节。宿主执行重定向校验，未返回最终URL；核验者仍须确认官方原文身份。'};
+      C().fail('SOURCE_UNAVAILABLE','Node 原文请求失败；宿主备用未取得完整文本正文：'+String(r.message||r.status||'响应不支持'));
+    return {url,fetchedAt:Date.now(),sha256:await signatureHash(r.body),hashBasis:'utf8-decoded-response',bytes:new TextEncoder().encode(r.body).byteLength,contentType,isPdf:false,textPreview:r.body.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1200),transport:'cindy.fetch',warning:'Node 请求失败，使用宿主文本备用；SHA256针对宿主解码后的UTF8文本，不是传输原始字节。宿主执行重定向校验，未返回最终URL；核验者仍须确认官方原文身份。'};
   }
 }
 async function regulatoryCheck(a,callId){

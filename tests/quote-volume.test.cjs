@@ -31,6 +31,7 @@ function market(body) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../plugin/node/market.cjs'), 'utf8'), {
     module, exports:module.exports, Buffer, URL, URLSearchParams, TextDecoder, Date,
     require(name) {
+      if (name === './network.cjs') return require('./helpers/network-fixture.cjs')(https);
       if (name === 'node:https') return https;
       if (name === '../core.js') return core;
       throw new Error('Unexpected dependency: '+name);

@@ -1,15 +1,16 @@
 'use strict';
-const https=require('node:https'),crypto=require('node:crypto'),C=require('../core.js');
+const network=require('./network.cjs'),crypto=require('node:crypto'),C=require('../core.js');
 const HOSTS=new Set(require('../information.js').SOURCE_HOSTS);
 const text=s=>String(s||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
-function transport(url,form,options={}){const u=new URL(url);if(u.protocol!=='https:'||!HOSTS.has(u.hostname)||u.username||u.password||u.port)throw new Error('资讯数据源不在固定白名单。');return new Promise((resolve,reject)=>{
+async function transport(url,form,options={}){
+ const u=new URL(url);if(u.protocol!=='https:'||!HOSTS.has(u.hostname)||u.username||u.password||u.port)throw new Error('资讯数据源不在固定白名单。');
  const body=form?new URLSearchParams(form).toString():null;
- const req=https.request(u,{method:form?'POST':'GET',headers:{'User-Agent':'Mozilla/5.0 Cindy-AShare/0.3',Accept:'*/*',Referer:'https://www.cninfo.com.cn/',...(form?{'Content-Type':'application/x-www-form-urlencoded','Content-Length':Buffer.byteLength(body)}:{})}},r=>{
-  if(r.statusCode!==200){r.resume();reject(new Error('资讯源HTTP '+r.statusCode));return;}
-  let size=0;const parts=[];r.on('data',b=>{size+=b.length;if(size>8*1024*1024)req.destroy(new Error('资讯响应超过8MiB。'));else parts.push(b);});
-  r.on('error',reject);r.on('end',()=>{try{const raw=Buffer.concat(parts);resolve({...(options.raw?{bytes:raw.length,contentType:String(r.headers['content-type']||''),isPdf:raw.subarray(0,5).toString()==='%PDF-',textPreview:/text|json/.test(String(r.headers['content-type']))?text(raw.toString('utf8').replace(/<script[\s\S]*?<\/script>/gi,'')).slice(0,1200):null}:{data:JSON.parse(raw.toString('utf8'))}),sha256:crypto.createHash('sha256').update(raw).digest('hex')});}catch{reject(new Error('资讯源返回非JSON。'));}});
- });req.setTimeout(9000,()=>req.destroy(new Error('资讯源超时。')));req.on('error',reject);req.end(body);
-});}
+ const r=await network.request(u,{method:form?'POST':'GET',body,headers:{'User-Agent':'Mozilla/5.0 Cindy-AShare/0.3',Accept:'*/*',Referer:'https://www.cninfo.com.cn/',...(form?{'Content-Type':'application/x-www-form-urlencoded','Content-Length':Buffer.byteLength(body)}:{})},headersOnlyOnError:true,limitMessage:'资讯响应超过8MiB。'});
+ if(r.statusCode!==200)throw Object.assign(new Error('资讯源HTTP '+r.statusCode),{code:'HTTP_STATUS_ERROR',statusCode:r.statusCode});
+ const raw=r.body;let data;
+ if(!options.raw){try{data=JSON.parse(raw.toString('utf8'));}catch{throw Object.assign(new Error('资讯源返回非JSON。'),{code:'SOURCE_FORMAT_ERROR'});}}
+ return {...(options.raw?{bytes:raw.length,contentType:String(r.headers['content-type']||''),isPdf:raw.subarray(0,5).toString()==='%PDF-',textPreview:/text|json/.test(String(r.headers['content-type']))?text(raw.toString('utf8').replace(/<script[\s\S]*?<\/script>/gi,'')).slice(0,1200):null}:{data}),sha256:crypto.createHash('sha256').update(raw).digest('hex')};
+}
 const cnDate=at=>new Date(at+8*3600000).toISOString().slice(0,10);
 function announcementRows(data,symbol,at){
  if(!Array.isArray(data.announcements))throw new Error('公告列表缺失，不能视为零公告。');

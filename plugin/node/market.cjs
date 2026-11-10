@@ -1,21 +1,15 @@
 'use strict';
-const https = require('node:https');
+const network = require('./network.cjs');
 const C = require('../core.js');
 const ALLOWED = new Set(['push2.eastmoney.com','push2his.eastmoney.com','qt.gtimg.cn','ifzq.gtimg.cn','zhibo.sina.com.cn','np-listapi.eastmoney.com','search-api-web.eastmoney.com']);
 const text = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 function get(url, gbk = false) {
   const u = new URL(url);
   if (u.protocol !== 'https:' || !ALLOWED.has(u.hostname) || u.port || u.username || u.password) throw new Error('数据源地址不在固定白名单。');
-  return new Promise((resolve, reject) => {
-    const referer=u.hostname==='search-api-web.eastmoney.com'?'https://so.eastmoney.com/':u.hostname.endsWith('.eastmoney.com')?'https://finance.eastmoney.com/':'https://finance.sina.com.cn/';
-    const req = https.get(u, { headers: { 'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0', Accept:'application/json,text/plain,*/*', Referer:referer } }, r => {
-      if (r.statusCode !== 200) { r.resume(); reject(Object.assign(new Error('数据源HTTP '+r.statusCode),{code:'HTTP_STATUS_ERROR',statusCode:r.statusCode})); return; }
-      const parts = []; let bytes = 0;
-      r.on('data', b => { bytes += b.length; if (bytes > 8*1024*1024) req.destroy(new Error('行情响应超过8MiB。')); else parts.push(b); });
-      r.on('end', () => { try { const b = Buffer.concat(parts); resolve(gbk ? new TextDecoder('gb18030').decode(b) : b.toString('utf8')); } catch(e) { reject(e); } });
-      r.on('error', reject);
-    });
-    req.setTimeout(9000, () => req.destroy(Object.assign(new Error('行情数据源超时。'),{code:'DATA_SOURCE_TIMEOUT'}))); req.on('error', reject);
+  const referer=u.hostname==='search-api-web.eastmoney.com'?'https://so.eastmoney.com/':u.hostname.endsWith('.eastmoney.com')?'https://finance.eastmoney.com/':'https://finance.sina.com.cn/';
+  return network.request(u,{headers:{'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0',Accept:'application/json,text/plain,*/*',Referer:referer},headersOnlyOnError:true,limitMessage:'行情响应超过8MiB。'}).then(r=>{
+    if(r.statusCode!==200)throw Object.assign(new Error('数据源HTTP '+r.statusCode),{code:'HTTP_STATUS_ERROR',statusCode:r.statusCode});
+    return gbk?new TextDecoder('gb18030').decode(r.body):r.body.toString('utf8');
   });
 }
 async function json(url) {

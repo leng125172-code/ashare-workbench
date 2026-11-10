@@ -34,5 +34,5 @@ readline.createInterface({input:process.stdin}).on('line',async line=>{
   try {
     if(!Object.hasOwn(methods,r.method))throw Object.assign(new Error('Unknown method'),{code:-32601});
     const result=await methods[r.method](r.params || {});reply({jsonrpc:'2.0',id:r.id,result});
-  } catch(e) {reply({jsonrpc:'2.0',id:r.id,error:{code:typeof e.code==='number'?e.code:-32000,message:String(e.message || '数据请求失败。').slice(0,180)}});}
+  } catch(e) {reply({jsonrpc:'2.0',id:r.id,error:{code:typeof e.code==='number'?e.code:-32000,message:String(e.message || '数据请求失败。').slice(0,180),...(typeof e.code==='string'?{networkCode:e.code}:{})}});}
 });
