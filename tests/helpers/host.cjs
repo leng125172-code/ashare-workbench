@@ -62,7 +62,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
   fs:async r=>{assert.equal(r.root,'workdir');assert.ok(r.callId);exported.set(r.path,r.content);return {ok:true,bytes:Buffer.byteLength(r.content)};},
   send:async r=>{if(r.type==='routine-request'&&r.action==='publish'){published.push(r.event);if(failEvents)return {ok:false,errorCode:'FIXTURE_OFFLINE'};}if(r.type==='tool-result'){results.get(r.callId)(r);results.delete(r.callId);}return {ok:true,accepted:0,duplicate:false};},
   node:{request:async r=>{const p=r.params;let result;
-   switch(r.method){case'sync_monitor':monitor.push(p);result={listening:!!p.plan};break;
+   switch(r.method){case'health':result={capabilities:options.hostClist?['host_clist_transport']:[]};break;case'sync_monitor':monitor.push(p);result={listening:!!p.plan};break;
    case'sectors':result={rows:(options.sectors||[{id:'BK0001',name:'行业A',changePct:1}]).map((s,i)=>({amount:(10000-i)*1000000,...s})),total:(options.sectors||[1]).length,complete:true,warnings:[]};break;
    case'news':result={rows:[{id:'n1',title:'本轮真实测试资讯',source:'fixture',url:'https://example.com/news',publishedMs:now,publishedAt:new Date(now).toISOString(),keyword:p.keyword}],warnings:[]};break;
    case'members':result={rows:items,total:3,complete:true,warnings:[],fetchedAt:now};break;
@@ -79,7 +79,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
  };
  class ClockDate extends Date{constructor(...args){super(...(args.length?args:[options.now()]));}static now(){return options.now();}}
  const context=vm.createContext({Date:options.now?ClockDate:Date,cindy,crypto,TextEncoder,TextDecoder,URL,URLSearchParams,console,btoa,atob,ReadableStream,CompressionStream,DecompressionStream,BroadcastChannel:class{postMessage(){}},setTimeout,clearTimeout,globalThis:null});context.globalThis=context;
- for(const name of ['core.js','calendar.js','simulation.js','chart.js','paper.js','information.js','regulatory.js','incremental.js','execution.js','forward.js','matching.js','history.js','performance.js','storage.js','repository.js','history-reset.js']){const file=path.join(root,name);if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,'utf8'),context);}
+ for(const name of ['core.js','clist.js','calendar.js','simulation.js','chart.js','paper.js','information.js','regulatory.js','incremental.js','execution.js','forward.js','matching.js','history.js','performance.js','storage.js','repository.js','history-reset.js']){const file=path.join(root,name);if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,'utf8'),context);}
  const main=fs.readFileSync(path.join(root,'main.js'),'utf8').replace(/import\('[^']+'\)/g,'Promise.resolve()');
  vm.runInContext(main,context);
  async function call(tool,args={}){const callId=crypto.randomUUID();const reply=await new Promise(resolve=>{results.set(callId,resolve);listener({type:'tool-call',tool,args,callId});});return JSON.parse(JSON.stringify(reply));}

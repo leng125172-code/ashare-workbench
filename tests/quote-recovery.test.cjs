@@ -10,7 +10,7 @@ function fixture({stamp='20261106100000',failure=false}={}){
   if(res.statusCode===200){res.emit('data',Buffer.from(quote?`v_sz002001="${fields.join('~')}";`:JSON.stringify({rc:0,data:{klines:Array.from({length:100},()=> '2026-11-05,10,10,11,9,1000,10000')}})));res.emit('end');}
  });return req;}};
  const module={exports:{}};class Clock extends Date{static now(){return at;}}
- vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../plugin/node/market.cjs'),'utf8'),{module,exports:module.exports,require:n=>n==='./network.cjs'?require('./helpers/network-fixture.cjs')(https):n==='node:https'?https:n==='../core.js'?C:require(n),Date:Clock,Buffer,URL,URLSearchParams,TextDecoder});
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../plugin/node/market.cjs'),'utf8'),{module,exports:module.exports,require:n=>n==='../clist.js'?require('../plugin/clist.js'):n==='./network.cjs'?require('./helpers/network-fixture.cjs')(https):n==='node:https'?https:n==='../core.js'?C:require(n),Date:Clock,Buffer,URL,URLSearchParams,TextDecoder});
  return {M:module.exports,count:()=>requests};
 }
 const input=()=>[{symbol:'sz002001',name:'离线样本',quote:{price:null,source:'eastmoney'}}];

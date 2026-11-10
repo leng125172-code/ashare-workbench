@@ -69,4 +69,5 @@ function createTransport({https=nativeHttps,env=process.env,version=process.vers
     });
   };
 }
-module.exports={request:createTransport(),createTransport,workerEnv,proxyOptions};
+function diagnostics(env=process.env){return {policy:env.NODE_USE_ENV_PROXY==='0'?'explicit_direct':'environment_if_configured',httpsProxyConfigured:!!(env.https_proxy!==undefined?env.https_proxy:env.HTTPS_PROXY),noProxyConfigured:!!(env.no_proxy!==undefined?env.no_proxy:env.NO_PROXY),allProxyConfigured:!!(env.all_proxy||env.ALL_PROXY),limitation:'配置摘要不是具体目标的有效路由；系统TUN和宿主网络策略需另行核对。'};}
+module.exports={request:createTransport(),createTransport,workerEnv,proxyOptions,diagnostics};

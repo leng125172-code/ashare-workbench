@@ -1,6 +1,6 @@
 'use strict';
 // One browser-logic writer owns every durable mutation; UI never overwrites the store.
-const modules=import('./core.js').then(()=>import('./calendar.js')).then(()=>import('./simulation.js')).then(()=>import('./chart.js')).then(()=>import('./paper.js')).then(()=>import('./information.js').then(()=>import('./regulatory.js')).then(()=>import('./incremental.js'))).then(()=>import('./execution.js')).then(()=>import('./forward.js')).then(()=>import('./matching.js')).then(()=>import('./history.js')).then(()=>import('./performance.js')).then(()=>import('./storage.js')).then(()=>import('./repository.js')).then(()=>import('./history-reset.js'));
+const modules=import('./core.js').then(()=>import('./clist.js')).then(()=>import('./calendar.js')).then(()=>import('./simulation.js')).then(()=>import('./chart.js')).then(()=>import('./paper.js')).then(()=>import('./information.js').then(()=>import('./regulatory.js')).then(()=>import('./incremental.js'))).then(()=>import('./execution.js')).then(()=>import('./forward.js')).then(()=>import('./matching.js')).then(()=>import('./history.js')).then(()=>import('./performance.js')).then(()=>import('./storage.js')).then(()=>import('./repository.js')).then(()=>import('./history-reset.js'));
 let selectedMode='live';
 const stores={},storageMeta={},forceStorageModes=new Set(),forceRepositoryModes=new Set(),repositoryModes=new Set(),repositoryBackups={},repositories={},stateRootHashes={};
 function repository(mode=selectedMode){return repositories[mode]||(repositories[mode]=globalThis.AShareRepository.create({request:request=>rawLibrary(mode,request),progress:progress=>{if(liveCall&&Date.now()-(repositoryProgressAt||0)>5000){repositoryProgressAt=Date.now();cindy.send({type:'tool-progress',callId:liveCall,message:'独立快照与引用写入 '+progress.done+'/'+progress.total});}}}));}
@@ -60,9 +60,25 @@ function freshDailyBar(stock,at=Date.now()){const last=stock?.klineAsOf||stock?.
 function informationCoverage(r,symbol,sectorId,quote){return I().coverage({news:r.news,dossier:r.dossiers?.[symbol],symbol,sectorId,sourceSnapshots:r.sourceSnapshots||{},quote:quote||r.dossiers?.[symbol]?.valuationReference});}
 const id=p=>(selectedMode==='simulation'?'sim-':'')+p+'-'+crypto.randomUUID().slice(0,12);
 const clone=o=>JSON.parse(JSON.stringify(o));
+let hostClistCapability;
 async function rpc(method,params={},callId) {
   await modules;
   if(selectedMode==='simulation')return globalThis.AShareSimulation.request(method,params);
+  if(['sectors','members'].includes(method)&&cindy.fetch&&globalThis.AShareClist){
+    if(hostClistCapability===undefined){
+      try{const h=await cindy.node.request({method:'health',params:{},timeoutMs:10000,...(callId?{callId}:{})});hostClistCapability=h.ok&&h.result?.capabilities?.includes('host_clist_transport')===true;}catch{hostClistCapability=false;}
+    }
+    if(hostClistCapability){
+      const receipts=[];const client=globalThis.AShareClist.create({core:C(),request:async url=>{
+        const r=await cindy.fetch({url,method:'GET',as:'text',timeoutMs:9000,headers:{'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0',Accept:'application/json,text/plain,*/*',Referer:'https://finance.eastmoney.com/'},...(callId?{callId}:{})});
+        if(!r.ok||r.status!==200)C().fail('DATA_SOURCE_ERROR','宿主行情请求失败：'+String(r.errorCode||r.status||'NETWORK'));
+        if(r.truncated||typeof r.body!=='string'||new TextEncoder().encode(r.body).byteLength>8*1024*1024)C().fail('DATA_SIZE_LIMIT','宿主行情正文不完整或超限。');
+        receipts.push({url,status:r.status,sha256:await signatureHash(r.body),hashBasis:'utf8-decoded-response',finalUrlExposed:false});
+        try{return JSON.parse(r.body);}catch{const m=r.body.match(/^[\w.$]+\s*\(([\s\S]*)\)\s*;?$/);if(m){try{return JSON.parse(m[1]);}catch{}}C().fail('SOURCE_FORMAT_ERROR','宿主行情返回非JSON。');}
+      }});
+      const data=await (method==='sectors'?client.sectors():client.members(params.sectorId));return {...data,sourceProvenance:{transport:'host-text',initialHost:'push2.eastmoney.com',redirectValidation:'host-enforced-https-ssrf-redirect-policy',finalUrlExposed:false,pages:receipts},warnings:[...data.warnings,'宿主文本通道已执行HTTPS/重定向守门；未返回最终URL，指纹针对解码文本，不冒充原始传输字节或最终主机证明。']};
+    }
+  }
   const r=await cindy.node.request({method,params,timeoutMs:60000,maxTotalMs:900000,...(callId?{callId}:{} )});
   if(!r.ok) throw Object.assign(new Error(r.message || '行情服务请求失败。'),{code:'DATA_SOURCE_ERROR'});
   return r.result;
@@ -445,9 +461,9 @@ const handlers={
     if(!cached||a.refresh||(!a.catalogToken&&offset===0&&Date.now()-cached.createdAt>60000)){const data=await rpc('sectors',{},callId),catalog=C().industryCatalog(data);cached={data,catalog,createdAt:Date.now(),token:await signatureHash(JSON.stringify(data))};industryCatalogCache[selectedMode]=cached;}
     const {data,catalog}=cached,query=String(a.search||'').trim().toLowerCase();
     const rows=query?catalog.rows.filter(s=>s.id.toLowerCase().includes(query)||String(s.name).toLowerCase().includes(query)):catalog.rows,page=rows.slice(offset,offset+limit);
-    return {mode:selectedMode,catalogToken:cached.token,industries:page,total:rows.length,directoryTotal:catalog.directoryTotal,nextOffset:offset+page.length<rows.length?offset+page.length:null,source:catalog.ranking.source,fetchedAt:catalog.ranking.fetchedAt,ranking:catalog.ranking,selection:{mode:'hot120',limit:120,selectedCount:Math.min(120,catalog.rows.length)},warnings:data.warnings||[]};
+    return {mode:selectedMode,catalogToken:cached.token,industries:page,total:rows.length,directoryTotal:catalog.directoryTotal,nextOffset:offset+page.length<rows.length?offset+page.length:null,source:catalog.ranking.source,fetchedAt:catalog.ranking.fetchedAt,ranking:catalog.ranking,selection:{mode:'hot120',limit:120,selectedCount:Math.min(120,catalog.rows.length)},sourceProvenance:data.sourceProvenance||null,warnings:data.warnings||[]};
   },
-  get_state:async()=>summary(await stateReady()),
+  get_state:async(a,callId)=>{const out=summary(await stateReady());if(a.includeNetworkStatus)out.networkDiagnostics=selectedMode==='simulation'?{networkDisabled:true}:await rpc('health',{},callId);return out;},
   configure:async(a)=>{
     const s=await stateReady(),prior=await requestCheck(s,a.requestKey,JSON.stringify(a));if(prior)return prior;
     if(a.expectedRevision!==s.revision)C().fail('REVISION_CONFLICT','配置已被更新，请重新读取状态。');
@@ -465,7 +481,7 @@ const handlers={
     return once(a.requestKey,JSON.stringify(a),d=>{
       const run={id:id('run'),startedAt:Date.now(),status:'collecting',trigger:String(a.trigger||'手动研究'),configRevision:d.revision,
         config:clone(d.config),sectors:selected,members:null,memberCursor:0,sectorCursor:0,stocks:{},industryData:{},judgments:{},news:news.rows,informationPolicy:1,dossiers:{},
-        warnings:[...sectors.warnings,...news.warnings],newsCoverage:news.coverage||null,newsDiagnostics:news.diagnostics||null,coverage:{marketIndustryCount:sectors.total,selectedIndustryCount:selected.length,completeDirectory:sectors.complete,selection}};
+        sourceProvenance:sectors.sourceProvenance||null,warnings:[...sectors.warnings,...news.warnings],newsCoverage:news.coverage||null,newsDiagnostics:news.diagnostics||null,coverage:{marketIndustryCount:sectors.total,selectedIndustryCount:selected.length,completeDirectory:sectors.complete,selection}};
       d.runs.push(run);return {runId:run.id,status:run.status,sectors:selected.map(x=>({id:x.id,name:x.name})),coverage:run.coverage};
     });
   },
@@ -478,7 +494,7 @@ const handlers={
       const sector=r.sectors[r.sectorCursor];
       if(!r.members){
         const [m,n]=await Promise.all([rpc('members',{sectorId:sector.id},callId),rpc('news',{keyword:sector.name},callId)]);
-        r.members=m.rows;r.memberCursor=0;r.industryData[sector.id]={total:m.total,complete:m.complete,fetchedAt:m.fetchedAt,warnings:[...m.warnings,...n.warnings],newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null};
+        r.members=m.rows;r.memberCursor=0;r.industryData[sector.id]={total:m.total,complete:m.complete,fetchedAt:m.fetchedAt,sourceProvenance:m.sourceProvenance||null,warnings:[...m.warnings,...n.warnings],newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null};
         r.news=[...new Map([...r.news,...n.rows].map(n=>[n.id,n])).values()];
       }
       const batch=r.members.slice(r.memberCursor,r.memberCursor+Math.min(8,Math.max(1,Number(a.batchSize)||4)));
