@@ -29,6 +29,9 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
   fetch:async r=>options.fetchHandler?options.fetchHandler(r):options.fetchResponse||{ok:false,message:'fixture-fallback-offline'},
   onHostMessage:f=>{listener=f;},
   library:async r=>{
+   options.libraryCalls?.push({op:r.op,path:r.path});
+   if(options.strictLibraryPaths&&typeof r.path==='string'&&r.path.split('/').some(s=>s.length>40))return {ok:false,errorCode:'PATH_INVALID',message:'fixture Library path segment exceeds 40 characters'};
+   const override=options.libraryOverride?.(r);if(override!==undefined)return override;
    if(unavailable)return {ok:false,errorCode:'LIBRARY_UNAVAILABLE'};
    if(r.op==='open')return {ok:true,state:'ready',usedBytes:[...files.values()].reduce((n,x)=>n+Buffer.byteLength(String(x)),0),fileCount:files.size+dbs.size,location:'fixture'};
    if(r.op==='status')return {ok:true,state:'ready',usedBytes:[...files.values()].reduce((n,x)=>n+Buffer.byteLength(String(x)),0),fileCount:files.size+dbs.size,location:'fixture'};

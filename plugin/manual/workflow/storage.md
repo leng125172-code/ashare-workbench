@@ -102,3 +102,19 @@ get_research的目录、股票、资讯、资料覆盖及派工清单支持offse
 已在库外将完整原始状态字节命中预先冻结的原生SHA/字节数后，可将其有序 `legacyManifest` 交给正式 `failure_archive_preview`：同时提供 `expectedStateLogicalSha256`、`expectedStateLogicalBytes`、`expectedSourceRevision`、`expectedSourceChunkCount` 及完整研究证明。最多128片，前片固定128KiB；仅从本模式Library按内容寻址原片读取，逐片及整状态重新校验，不接受调用方run/state正文。源版本、唯一run、配置、全部判断及原历史token均须一致。
 
 实际 `failure_archive_recover` 绑定当前根/版本与previewToken，先将验证过的清单以原格式顶层S.envelope单独不可变保存至计算摘要路径，并用raw IO读回；再写/核对目标报告归档，最后更新该failed索引计数及来源。保护源清单新增文件不使同键重试失效；不会回滚整份旧状态、账户、计划、动作或续期资料。源清单保护由storageProtection识别，后续缓存清理不得删仍被引用原片。失败报告仍明确是重建。归档/保护清单/根任一阶段失败，保留断点并按同键同参对账。
+
+## 0.18.5 失败提交意图的只读核对
+
+失败意图新路径为 `failure-commits/<SHA前32位>/<SHA后32位>.json`，不改变原requestKey或参数签名。旧单段64位摘要加扩展名的路径可能被宿主拒绝；`PATH_INVALID`本身不证明意图不存在。若旧路径被拒，插件只在固定 `failure-commits` 目录有界完整列举（每页100、最多8页）明确未找到该旧文件后判为不存在；列表失败/不完整/超限、重复entry、畸形basename、规范文件存在但父目录或分层目录不在列表中、旧文件存在但不可读、双路径冲突均停止，不删除或迁移原件。
+
+精确只读核对使用：
+
+```js
+plan_control({mode:'live',action:'failure_commit_status',requestKey:'本次只读核对键',
+  failureCommit:{runId:'实际原批次',requestKey:'原record_failure稳定键',
+    requestSignature:'原record_failure完整参数JSON.stringify原样字节的SHA256',expectedRevision:实际当前版本}})
+```
+
+签名须来自原意图日志中实际发送的完整参数和字段顺序，不能排序字段、补mode或改message。接口不接受任意路径/文件名，只返回模式、当前版本、研究身份、请求键摘要、规范/旧路径读取阶段及去敏错误码、有界目录核对结论；如找到意图，校验签名、原版本、模式、研究身份和归档路径后返回摘要及原失败时刻，不返回完整run或正文。此读取不会建库、保存意图、提交失败、创建外部动作或自动重放。
+
+`already_committed`沿用原成功记录；`intent_verified`仍需按原键原参数核对后续接；`absent_verified`只证明本次正式读取下无意图，不是换键或自动重放授权。`blocked`、签名/版本/身份冲突、底层错误或超时均保留unknown并停止。旧有效意图可继续使用首次冻结的失败时刻；恢复接口仍只适用于已failed且精确匹配的缺档，不可拿来结束judging研究。

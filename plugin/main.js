@@ -331,12 +331,55 @@ async function storageCleanupExecute(a){
 }
 
 let industryCatalogCache={};
+// Intent paths are derived only from the exact request key; no caller paths.
+function failureReadCode(r){return typeof r?.errorCode==='string'&&/^[A-Z0-9_]{1,64}$/.test(r.errorCode)?r.errorCode:'UNKNOWN_READ_ERROR';}
+async function legacyFailurePresence(name,canonicalDirectory){
+ let cursor;const seen=new Set(),entriesSeen=new Set();
+ for(let page=0;page<8;page++){
+  const r=await library({op:'list',path:'failure-commits',recursive:false,limit:100,...(cursor?{cursor}:{})});
+  if(!r.ok){if(r.errorCode==='NOT_FOUND'&&page===0&&!canonicalDirectory)return {status:'absent',pages:1};return {status:'unknown',stage:'legacy-list',errorCode:r.errorCode==='NOT_FOUND'?'INCONSISTENT_LIST':failureReadCode(r)};}
+  if(!Array.isArray(r.entries)||r.entries.length>100||r.entries.some(x=>!x||typeof x.path!=='string'||!x.path.startsWith('failure-commits/')||!/^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/.test(x.path.slice(16))||x.path.endsWith('.')||!['file','dir'].includes(x.kind)))return {status:'unknown',stage:'legacy-list',errorCode:'INVALID_LIST_RESPONSE'};
+  for(const entry of r.entries){if(entriesSeen.has(entry.path))return {status:'unknown',stage:'legacy-list',errorCode:'INCONSISTENT_LIST'};entriesSeen.add(entry.path);if(canonicalDirectory&&entry.path===canonicalDirectory&&entry.kind!=='dir')return {status:'unknown',stage:'legacy-list',errorCode:'INCONSISTENT_LIST'};}
+  if(r.entries.some(x=>x.path===name))return {status:'present_unreadable',pages:page+1};
+  if(r.hasMore===false&&(r.nextCursor===null||r.nextCursor===undefined)){if(canonicalDirectory&&!entriesSeen.has(canonicalDirectory))return {status:'unknown',stage:'legacy-list',errorCode:'INCONSISTENT_LIST'};return {status:'absent',pages:page+1};}
+  if(r.hasMore!==true||typeof r.nextCursor!=='string'||!r.nextCursor||r.nextCursor.length>2048||seen.has(r.nextCursor))return {status:'unknown',stage:'legacy-list',errorCode:'INCOMPLETE_LIST'};
+  cursor=r.nextCursor;seen.add(cursor);
+ }
+ return {status:'unknown',stage:'legacy-list',errorCode:'LIST_PAGE_LIMIT'};
+}
+async function failureIntentRead(key){
+ const hash=await signatureHash(key),path='failure-commits/'+hash.slice(0,32)+'/'+hash.slice(32)+'.json',legacyPath='failure-commits/'+hash+'.json';
+ const current=await library({op:'read',path}),legacy=await library({op:'read',path:legacyPath});
+ const reads=[{stage:'canonical-read',ok:current.ok===true,...(!current.ok?{errorCode:failureReadCode(current)}:{})},{stage:'legacy-read',ok:legacy.ok===true,...(!legacy.ok?{errorCode:failureReadCode(legacy)}:{})}];
+ let presence;
+ if(!legacy.ok&&legacy.errorCode==='PATH_INVALID')presence=await legacyFailurePresence(legacyPath,current.ok?path.slice(0,path.lastIndexOf('/')):null);
+ const blocked=!current.ok&&current.errorCode!=='NOT_FOUND'?reads[0]:!legacy.ok&&legacy.errorCode!=='NOT_FOUND'&&!(legacy.errorCode==='PATH_INVALID'&&presence?.status==='absent')?{stage:presence?.stage||'legacy-read',errorCode:presence?.errorCode||failureReadCode(legacy)}:null;
+ if(blocked)return {path,reads,legacyPresence:presence,blocked};
+ if(current.ok&&legacy.ok&&current.content!==legacy.content)return {path,reads,blocked:{stage:'dual-intent-compare',errorCode:'ARCHIVE_CONFLICT'}};
+ const saved=current.ok?current:legacy.ok?legacy:null;
+ if(!saved)return {path,reads,legacyPresence:presence,status:'absent_verified',tx:null};
+ try{const tx=JSON.parse(saved.content);if(!tx||typeof tx!=='object'||Array.isArray(tx))throw Error('invalid');return {path,reads,legacyPresence:presence,status:'intent_found',tx};}catch{return {path,reads,blocked:{stage:'intent-json',errorCode:'INVALID_INTENT_JSON'}};}
+}
+function validateFailureIntent(tx,s,signature,runId){
+ const report=tx?.archive?.report,run=tx?.archive?.run,current=runId?s.runs.find(x=>x.id===runId):null;
+ if(!tx||tx.signature!==signature||tx.expectedRevision!==s.revision||!report||report.mode!==selectedMode||report.status!=='failed'||!Number.isFinite(report.finishedAt)||!/^[a-zA-Z0-9_-]{3,120}$/.test(report.id||'')||tx.archivePath!=='reports/'+report.id+'.json'||(runId?(report.id!==runId||run?.id!==runId||!current||run.startedAt!==current.startedAt):run!=null))C().fail('FAILURE_RECONCILE','失败归档提交意图与请求、模式、研究或状态版本不符，停止覆盖。');
+}
+async function failureCommitStatus(a){
+ const p=a.failureCommit,s=await stateReady();
+ if(!p||Object.keys(p).some(k=>!['runId','requestKey','requestSignature','expectedRevision'].includes(k))||!/^[a-zA-Z0-9_-]{3,120}$/.test(p.runId||'')||typeof p.requestKey!=='string'||p.requestKey.length<3||p.requestKey.length>120||!/^[a-f0-9]{64}$/.test(p.requestSignature||'')||!Number.isInteger(p.expectedRevision)||p.expectedRevision!==s.revision)C().fail('FAILURE_DIAGNOSTIC_INPUT','只读核对须提供精确研究、原请求键/参数摘要及当前版本。');
+ const run=lookup(s,p.runId),prior=s.requests[p.requestKey],base={mode:selectedMode,revision:s.revision,runId:run.id,runStatus:run.status,requestKeySha256:await signatureHash(p.requestKey),readOnly:true};
+ if(prior){if(prior.signature!==p.requestSignature)C().fail('REQUEST_CONFLICT','请求摘要与成功记录不同。');if(prior.result?.reportId!==run.id||prior.result?.status!=='failed')C().fail('FAILURE_RECONCILE','原请求成功记录不对应本失败研究。');return {...base,status:'already_committed',reportId:prior.result.reportId};}
+ const r=await failureIntentRead(p.requestKey),out={...base,reads:r.reads,...(r.legacyPresence?{legacyPresence:r.legacyPresence}:{})};
+ if(r.blocked)return {...out,status:'blocked',blocked:r.blocked};
+ if(r.tx){validateFailureIntent(r.tx,s,p.requestSignature,p.runId);return {...out,status:'intent_verified',expectedRevision:r.tx.expectedRevision,finishedAt:r.tx.archive.report.finishedAt,reportId:r.tx.archive.report.id,intentSha256:await signatureHash(JSON.stringify(r.tx))};}
+ return {...out,status:'absent_verified',note:'已通过规范路径读取及旧路径读取/有界目录核对确认当前无提交意图；不是自动重放授权。'};
+}
 async function recordFailure(a){
  const s=await stateReady(),signature=JSON.stringify(a),prior=await requestCheck(s,a.requestKey,signature);if(prior)return prior;
- const commitPath='failure-commits/'+await signatureHash(a.requestKey)+'.json',saved=await library({op:'read',path:commitPath});let tx;
- if(saved.ok){tx=JSON.parse(saved.content);if(tx.signature!==await signatureHash(signature)||tx.expectedRevision!==s.revision)C().fail('FAILURE_RECONCILE','失败归档提交意图与请求或状态版本不符，停止覆盖。');}
- else{
-  if(saved.errorCode!=='NOT_FOUND')C().fail('ARCHIVE_READ','失败归档意图无法核对。');const run=a.runId?lookup(s,a.runId):null;if(run&&(run.archivePath||['completed','failed','cancelled'].includes(run.status)))C().fail('RUN_CLOSED','不能改写已结束研究；缺失归档须用精确恢复接口。');
+ const intent=await failureIntentRead(a.requestKey),commitPath=intent.path;let tx=intent.tx;
+ if(intent.blocked)C().fail(intent.blocked.errorCode==='ARCHIVE_CONFLICT'?'ARCHIVE_CONFLICT':'ARCHIVE_READ','失败归档意图无法核对：'+intent.blocked.stage+'/'+intent.blocked.errorCode+'。');
+ if(tx)validateFailureIntent(tx,s,await signatureHash(signature),a.runId);
+ else{const run=a.runId?lookup(s,a.runId):null;if(run&&(run.archivePath||['completed','failed','cancelled'].includes(run.status)))C().fail('RUN_CLOSED','不能改写已结束研究；缺失归档须用精确恢复接口。');
   const now=Date.now(),plan=active(s),report={mode:selectedMode,id:run?.id||id('failed'),finishedAt:now,trigger:a.trigger||run?.trigger||'研究异常',summary:String(a.message||'本轮未完成，保留原计划。'),industries:[],allocation:null,planId:plan?.id||null,planSnapshot:plan?clone(plan):null,planChanged:false,status:'failed',news:run?.news||[],warnings:['本轮未完成分析；实际持仓与原投资计划未改写。']};report.markdown=C().reportMarkdown(report,plan);
   tx={signature:await signatureHash(signature),expectedRevision:s.revision,archivePath:'reports/'+report.id+'.json',archive:clone({report,run,plan})};await verifiedArchive(commitPath,tx);
  }
@@ -677,6 +720,7 @@ const handlers={
     if(a.action==='storage_cleanup_preview')return storageCleanupPreview();
     if(a.action==='storage_cleanup_execute')return storageCleanupExecute(a);
     if(a.action==='storage_archive_completed')return storageArchiveCompleted(a);
+    if(a.action==='failure_commit_status')return failureCommitStatus(a);
     if(a.action==='failure_archive_preview')return failureArchivePreview(a);
     if(a.action==='failure_legacy_inventory')return failureLegacyInventory(a);
     if(a.action==='failure_archive_recover')return failureArchiveRecover(a);

@@ -5,7 +5,7 @@
   "name": "A股投研",
   "description": "A股投研工作台：成交额前120/手动倾向行业、排名刷新；专项资讯检索、资讯源状态与覆盖诊断、K线、行业四组/股票三档、证据互核及配置计划。区分投资候选与停牌观察，支持复查、微信报告和失败归档恢复；真实/模拟隔离，仅建议，无自动交易。",
   "whenToUse": "A股行业行情与投资优先级、行业内股票价值分档、K线与技术指标、已有持仓或投入资金的配仓调仓建议、投资计划、定时复查与微信投研报告。独立模拟盈亏账本、手续费与滑点核算、模拟成交记录与完整报价估值。 行业政策、公司公告与财报、估值口径、风险事件的来源覆盖和交叉核验。",
-  "version": "0.18.3",
+  "version": "0.18.5",
   "entry": "main.js",
   "icon": "assets/icon.png",
   "tools": [
@@ -1104,7 +1104,7 @@
     },
     {
       "name": "plan_control",
-      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。 failure_archive_preview/recover仅按原生不可变记录和版本/范围/摘要修复缺失失败归档，失败状态及外部动作保留。 failure_legacy_inventory只读分页检查原生旧分片清单/备份，不迁移、不拼片、不恢复写入。 已证明旧格式完整原字节时，failure_archive_preview/recover支持legacyManifest有序native refs；先保护源清单，不迁移、不回滚整state。",
+      "description": "暂停/恢复/结束计划及两条调度；scan分批扫描推荐股票，get_scan取证据，record_scan保存逐股AI符合性结论。；paper_*为独立模拟账本，必须mode:simulation，不生成真实成交。 forward_*使用真实行情冻结技术观察，只写simulation，不形成配置/交易或正式计划。 performance_*固化建议及独立效果账本，参数performance；不会交易。 performance_match匹配已有模型最新估值的下一期行业基准；performance_match_check仅模拟独立算法验收。 performance_history_check只读simulation回放历史原文与价格，参数performance.parameters含events/datasets/cutoff，不改正式表现。；storage_compact保真拆分旧状态，须storage.expectedRevision，不采集或改投资计划。；storage_status只读容量，storage_migrate保留备份升级独立快照仓储，storage_archive_completed仅归档终态批次，storage_cleanup_preview/execute先预览后确认仅清理无引用缓存。 reset_history_preview只读预览本mode历史；reset_history携带expectedRevision/previewToken/requestKey清历史并保留账户，失败按同键续接。须先停止研究、核对原生任务并库外备份；不会删除其它mode。 failure_archive_preview/recover仅按原生不可变记录和版本/范围/摘要修复缺失失败归档，失败状态及外部动作保留。 failure_legacy_inventory只读分页检查原生旧分片清单/备份，不迁移、不拼片、不恢复写入。 已证明旧格式完整原字节时，failure_archive_preview/recover支持legacyManifest有序native refs；先保护源清单，不迁移、不回滚整state。 failure_commit_status只读核对精确runId/原requestKey/参数SHA及当前revision的失败提交意图；无任意路径，不自动重放。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1158,7 +1158,8 @@
               "reset_history",
               "failure_archive_preview",
               "failure_archive_recover",
-              "failure_legacy_inventory"
+              "failure_legacy_inventory",
+              "failure_commit_status"
             ]
           },
           "reason": {
@@ -1668,6 +1669,34 @@
               "contextCheckedAt"
             ],
             "additionalProperties": false
+          },
+          "failureCommit": {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "requestKey": {
+                "type": "string",
+                "description": "待核对原record_failure稳定键，非本诊断调用键。"
+              },
+              "requestSignature": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "原record_failure完整参数JSON原样序列化的SHA256；不添加/重排mode或字段。"
+              },
+              "expectedRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "runId",
+              "requestKey",
+              "requestSignature",
+              "expectedRevision"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -1992,7 +2021,7 @@
       }
     ]
   },
-  "releaseNotes": "相较已上架0.18.2：按照东方财富公开搜索前端的JSONP回调及高亮参数契约修复行业、公司名称与股票代码的专项资讯检索，按发布时间取有界首屏结果。区分合法空结果、接口失败和市场快讯部分备用，保留各源HTTP状态/错误及原始发布时间；单股查询、行业采集和资讯视图展示覆盖诊断。检索结果仍为元数据，明确关键词字面匹配、来源总量封顶及首屏覆盖边界，不替代公司身份核验、官方原文及双人互核。Cindy与dsh共享修复；不改账户、持仓、历史归档、证据时效或定稿风控，不新增交易或自动发送。",
+  "releaseNotes": "修复失败提交意图的超长路径，使用32/32摘要分层；兼容核对旧意图且遇未知或冲突拒写。新增精确请求的只读失败意图诊断，返回有界状态和原始错误码，不读取任意路径，不重开历史研究。",
   "mobile": {
     "channels": [
       "ashare-workbench"
