@@ -31,6 +31,7 @@ function market(body) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../plugin/node/market.cjs'), 'utf8'), {
     module, exports:module.exports, Buffer, URL, URLSearchParams, TextDecoder, Date,
     require(name) {
+      if (name === '../calendar.js') return require('../plugin/calendar.js');
       if (name === '../clist.js') return require('../plugin/clist.js');
       if (name === '../kline.js') return require('../plugin/kline.js');
       if (name === 'node:crypto') return require('node:crypto');

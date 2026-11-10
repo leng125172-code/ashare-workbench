@@ -16,6 +16,17 @@ test('source parser rejects wrong company, malformed/duplicate/future dates, val
  for(const change of variants){const d=data();change(d);assert.throws(()=>K.parse(d,'sh600001'),{code:'KLINE_SOURCE_INVALID'});}
  assert.throws(()=>K.parse(data(),'sh600001',{fetchedAt:now-86400001}),{code:'KLINE_SOURCE_INVALID'});
 });
+test('intraday bars stay visible but analysis waits until the exchange calendar marks the day complete',()=>{
+ const calendar=require('../plugin/calendar.js'),bars=[{date:'2026-11-10',open:100,close:101,high:102,low:99,volume:10,amount:1000},{date:'2026-11-11',open:101,close:105,high:106,low:100,volume:10,amount:1000}];
+ const morning=K.analyzeDaily(bars,C,calendar,Date.parse('2026-11-11T10:00:00+08:00'));assert.equal(morning.asOf,'2026-11-10');assert.equal(morning.observedAsOf,'2026-11-11');assert.equal(morning.indicators.count,1);assert.equal(bars.length,2);
+ const afterClose=K.analyzeDaily(bars,C,calendar,Date.parse('2026-11-11T15:11:00+08:00'));assert.equal(afterClose.asOf,'2026-11-11');assert.equal(afterClose.indicators.count,2);
+});
+test('host assessment preserves raw-source identity while omitting not-yet-complete bars from its indicator date',async()=>{
+ const d=data(),today=new Date(Date.now()+8*3600000).toISOString().slice(0,10);d.data.klines.shift();d.data.klines.push(today+',101,105,106,100,1000,100000');
+ const w={...wire(),body:JSON.stringify(d)};w.sha256=crypto.createHash('sha256').update(w.body).digest('hex');
+ const r=(await M.assess([{symbol:'sh600001',quote:{price:100,asOf:Date.now()}}],()=>{},{sh600001:w}))[0],expected=require('../plugin/calendar.js').expectedDailyBar();
+ assert.equal(r.klineObservedAsOf,today);assert.equal(r.klineAsOf,expected);assert.equal(r.indicators.asOf,expected);assert.equal(r.klineSourceProvenance.sha256,w.sha256);
+});
 test('worker checks the exact internal host response fingerprint and never accepts arbitrary bars or source URL',()=>{
  const w=wire();assert.equal(M.hostKline(w,'sh600001').bars.length,140);
  for(const change of [w=>w.url='https://other.test/a',w=>w.body+=' ',w=>w.sha256='0'.repeat(64),w=>w.transport='unverified',w=>w.finalUrlExposed=true,w=>w.body='x'.repeat(K.MAX_BYTES+1),w=>w.fetchedAt=Date.now()+120000,w=>delete w.fetchedAt]){const x={...w};change(x);assert.throws(()=>M.hostKline(x,'sh600001'));}

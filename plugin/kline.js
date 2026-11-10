@@ -23,6 +23,10 @@ function indicators(bars,core){
  if(!last||!['open','close','high','low'].every(k=>Number.isFinite(last[k])&&last[k]>0)||result.ready&&result.asOf!==last.date)return {ready:false,count:result.count,asOf:result.asOf||null,reason:'最新日K无可用正价格，或指标日期与原始末条不一致；不得以较旧指标冒充最新。'};
  return result;
 }
+function analyzeDaily(bars,core,calendar,at=Date.now()){
+ const expectedAsOf=calendar.expectedDailyBar(at),complete=bars.filter(b=>b.date<=expectedAsOf),asOf=complete.at(-1)?.date||null;
+ return {indicators:indicators(complete,core),asOf,expectedAsOf,observedAsOf:bars.at(-1)?.date||null};
+}
 function assessmentBatches(params){
  if(!Array.isArray(params.items)||!params.items.length||params.items.length>8||!params.hostKlines||typeof params.hostKlines!=='object')fail('日K工作进程批次无效。');
  const payload=items=>({...params,items,hostKlines:Object.fromEntries([...new Set(items.map(x=>symbol(x.symbol)))].map(s=>[s,params.hostKlines[s]]))});
@@ -38,5 +42,5 @@ function assessmentBatches(params){
  }
  if(items.length)batches.push(payload(items));return batches;
 }
-return {MAX_BYTES,MAX_BARS,MAX_RPC_BYTES,url,parse,indicators,assessmentBatches};
+return {MAX_BYTES,MAX_BARS,MAX_RPC_BYTES,url,parse,indicators,analyzeDaily,assessmentBatches};
 });

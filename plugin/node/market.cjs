@@ -2,6 +2,7 @@
 const network = require('./network.cjs');
 const C = require('../core.js');
 const K = require('../kline.js');
+const calendar = require('../calendar.js');
 const crypto = require('node:crypto');
 const ALLOWED = new Set(['push2.eastmoney.com','push2his.eastmoney.com','qt.gtimg.cn','ifzq.gtimg.cn','zhibo.sina.com.cn','np-listapi.eastmoney.com','search-api-web.eastmoney.com']);
 const text = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
@@ -135,7 +136,7 @@ async function assess(items, progress = ()=>{}, hostKlines) {
       if(valid){s.quote=q;s.warnings.push('行业列表缺报价，已通过备用源取得带实际时点的有效报价；不等于交易状态已核实。');}
       else{if(q&&C.finite(q.price)&&q.price>0&&Number.isFinite(q.asOf)&&(!Number.isFinite(s.lastKnownQuote?.asOf)||q.asOf>s.lastKnownQuote.asOf))s.lastKnownQuote={...q,usage:'dated_reference_only'};s.warnings.push('缺少有效报价：'+s.quoteDiagnostics.reason+'；停复牌状态需官方公告核验，旧价格仅作带日期参考。');}
     }
-    try { const k = hostKlines===undefined?await kline(item.symbol):hostKline(hostKlines[item.symbol],item.symbol); s.indicators = K.indicators(k.bars,C); s.klineSource=k.source; s.adjustment=k.adjustment; s.klineAsOf=k.bars.at(-1)?.date;if(k.sourceProvenance)s.klineSourceProvenance=k.sourceProvenance; s.warnings.push(...k.warnings); }
+    try { const k = hostKlines===undefined?await kline(item.symbol):hostKline(hostKlines[item.symbol],item.symbol),analysis=K.analyzeDaily(k.bars,C,calendar,Date.now()); s.indicators=analysis.indicators; s.klineSource=k.source; s.adjustment=k.adjustment; s.klineAsOf=analysis.asOf;s.klineObservedAsOf=analysis.observedAsOf;if(k.sourceProvenance)s.klineSourceProvenance=k.sourceProvenance; s.warnings.push(...k.warnings);if(analysis.observedAsOf>analysis.asOf)s.warnings.push('最新一根日K尚未完整，分析仅使用截至'+(analysis.asOf||'未知日期')+'的完整交易日。'); }
     catch(e) { s.indicators={ready:false,count:0};s.klineDiagnostics={state:'unavailable',transport:hostKlines===undefined?'node':'host-text',code:e.code||'DATA_SOURCE_ERROR',...(e.sourceCode?{sourceCode:e.sourceCode,stage:e.sourceStage}:{}),...(e.sourceFailures?{sources:e.sourceFailures}:{})}; s.warnings.push('K线来源不可用，未分档：'+s.klineDiagnostics.code+'。'); }
     out.push(s); progress(out.length,items.length);
   }

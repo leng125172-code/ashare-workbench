@@ -245,7 +245,8 @@ async function stockData(a,callId){
   const context=selectedMode==='simulation'?{scenario:a.scenario,asOf:a.asOf}:{};
   const [k,q,n]=await Promise.all([rpc('kline',{symbol:a.symbol,period:a.period||'day',...context},callId),rpc('quotes',{symbols:[a.symbol],...context},callId),rpc('news',{keyword:a.keyword||a.symbol.slice(-6),...context},callId)]);
   const dossier=selectedMode==='live'&&a.includeInformation!==false?await rpc('information',{symbol:a.symbol},callId):null;
-  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:a.period&&a.period!=='day'?null:globalThis.AShareKline.indicators(k.bars,C()),news:n.rows,newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null,warnings:[...k.warnings,...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
+  const analysis=a.period&&a.period!=='day'?null:globalThis.AShareKline.analyzeDaily(k.bars,C(),globalThis.AShareCalendar);
+  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:analysis?.indicators||null,analysisAsOf:analysis?.asOf||null,news:n.rows,newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null,warnings:[...k.warnings,...(analysis&&analysis.observedAsOf>analysis.asOf?['当前日K尚未完整，指标仅使用截至'+(analysis.asOf||'未知日期')+'的完整交易日。']:[]),...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
 }
 function enqueueImages(d,report,plan,config){
   if(!plan||config?.sendKlineImages===false)return;
