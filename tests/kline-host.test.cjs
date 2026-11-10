@@ -86,3 +86,21 @@ test('failed/truncated/foreign host responses stay unavailable, while old worker
  }
  const legacy=host(new Map(),false,false,{fetchHandler:async()=>{throw Error('must not use host with old capability');}}),r=await legacy.call('stock_detail',{symbol:'sh600001',includeInformation:false});assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.result.source,'offline-fixture');
 });
+test('large valid host snapshots are assessed in byte-bounded chunks in original item order',async()=>{
+ const assessCalls=[],h=host(new Map(),false,false,{hostKline:true,assessCalls,fetchHandler:async r=>{
+  const d=data(new URL(r.url).searchParams.get('secid').split('.')[1]);d.extra='x'.repeat(105000);return {ok:true,status:200,body:JSON.stringify(d)};
+ }}),runId=await start(h);
+ assert.ok(assessCalls.length>1);for(const p of assessCalls)assert.ok(Buffer.byteLength(JSON.stringify(p))<=K.MAX_RPC_BYTES);
+ const sent=assessCalls.flatMap(p=>p.items.map(x=>x.symbol));assert.equal(sent.length,3);assert.deepEqual(sent,['sh600001','sh600002','sh600003']);
+ const r=await h.call('get_research',{runId,sectorId:'BK0001'});assert.equal(r.result.stocks.length,3);assert.ok(r.result.stocks.every(x=>x.indicators.ready&&x.klineAsOf===last));
+});
+test('request budget counts escaped JSON, and an oversized later item is rejected before any assessment',async()=>{
+ const d=data();d.extra='"'.repeat(62000);const body=JSON.stringify(d);assert.ok(Buffer.byteLength(body)<K.MAX_BYTES);
+ const single={items:[{symbol:'sh600001'}],hostKlines:{sh600001:{...wire(),body}}};assert.ok(Buffer.byteLength(JSON.stringify(single))>K.MAX_RPC_BYTES);assert.throws(()=>K.assessmentBatches(single),{code:'DATA_SIZE_LIMIT'});
+ const assessCalls=[],h=host(new Map(),false,false,{hostKline:true,assessCalls,fetchHandler:async r=>{
+  const symbol=new URL(r.url).searchParams.get('secid').split('.')[1],d=data(symbol);if(symbol==='600002')d.extra='"'.repeat(62000);return {ok:true,status:200,body:JSON.stringify(d)};
+ }});
+ await h.call('configure',{requestKey:'budget-config',expectedRevision:0,config});const begun=await h.call('begin_research',{requestKey:'budget-begin'}),before=(await h.call('get_state')).result;
+ const r=await h.call('collect_batch',{requestKey:'budget-collect',runId:begun.result.runId,batchSize:8});assert.equal(r.ok,false);assert.equal(r.errorCode,'DATA_SIZE_LIMIT');assert.equal(assessCalls.length,0);
+ const after=(await h.call('get_state')).result;for(const key of ['revision','latestRun','pendingActions','config'])assert.deepEqual(after[key],before[key]);
+});

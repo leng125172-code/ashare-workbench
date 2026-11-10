@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AShareKline=api;})(globalThis,function(){
 'use strict';
-const MAX_BYTES=256*1024,MAX_BARS=140;
+const MAX_BYTES=256*1024,MAX_BARS=140,MAX_RPC_BYTES=240*1024;
 function fail(message){throw Object.assign(new Error(message),{code:'KLINE_SOURCE_INVALID'});}
 function symbol(s){if(typeof s!=='string'||!/^(sh|sz|bj)\d{6}$/.test(s))fail('日K证券代码无效。');return s;}
 function url(code){const s=symbol(code),p=new URLSearchParams({secid:(s.startsWith('sh')?'1.':'0.')+s.slice(2),fields1:'f1,f2,f3,f4,f5,f6',fields2:'f51,f52,f53,f54,f55,f56,f57',klt:'101',fqt:'1',end:'20500101',lmt:String(MAX_BARS)});return 'https://push2his.eastmoney.com/api/qt/stock/kline/get?'+p;}
@@ -23,5 +23,20 @@ function indicators(bars,core){
  if(!last||!['open','close','high','low'].every(k=>Number.isFinite(last[k])&&last[k]>0)||result.ready&&result.asOf!==last.date)return {ready:false,count:result.count,asOf:result.asOf||null,reason:'最新日K无可用正价格，或指标日期与原始末条不一致；不得以较旧指标冒充最新。'};
  return result;
 }
-return {MAX_BYTES,MAX_BARS,url,parse,indicators};
+function assessmentBatches(params){
+ if(!Array.isArray(params.items)||!params.items.length||params.items.length>8||!params.hostKlines||typeof params.hostKlines!=='object')fail('日K工作进程批次无效。');
+ const payload=items=>({...params,items,hostKlines:Object.fromEntries([...new Set(items.map(x=>symbol(x.symbol)))].map(s=>[s,params.hostKlines[s]]))});
+ const fits=p=>new TextEncoder().encode(JSON.stringify(p)).byteLength<=MAX_RPC_BYTES;
+ const batches=[];let items=[];
+ // Preflight every chunk before sending the first one. Escaped raw JSON and
+ // the original item fields count towards the host's 256KiB params limit.
+ for(const item of params.items){
+  const trial=payload([...items,item]);
+  if(fits(trial)){items.push(item);continue;}
+  if(items.length)batches.push(payload(items));
+  items=[item];if(!fits(payload(items)))throw Object.assign(new Error('单项日K分析输入超过工作进程安全体积上限；未截断或发送。'),{code:'DATA_SIZE_LIMIT'});
+ }
+ if(items.length)batches.push(payload(items));return batches;
+}
+return {MAX_BYTES,MAX_BARS,MAX_RPC_BYTES,url,parse,indicators,assessmentBatches};
 });

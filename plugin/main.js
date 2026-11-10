@@ -102,6 +102,14 @@ async function rpc(method,params={},callId) {
     const symbols=[...new Set(params.items.map(x=>C().symbol(x.symbol)))],hostKlines={};
     for(let start=0;start<symbols.length;start+=2)await Promise.all(symbols.slice(start,start+2).map(async symbol=>{try{hostKlines[symbol]=await hostKlineSnapshot(symbol,callId);}catch(e){const code=typeof e.code==='string'&&/^[A-Z0-9_]+$/.test(e.code)?e.code:'DATA_SOURCE_ERROR',sourceCode=typeof e.sourceCode==='string'&&/^[A-Z0-9_]+$/.test(e.sourceCode)?e.sourceCode:code;hostKlines[symbol]={errorCode:code,sourceCode,sourceStage:e.sourceStage==='host-request'?'host-request':'host-read-or-parse',message:'宿主日K未取得：'+sourceCode};}}));
     params={...params,hostKlines};
+    const batches=globalThis.AShareKline.assessmentBatches(params),out=[];
+    for(const chunk of batches){
+      const r=await cindy.node.request({method,params:chunk,timeoutMs:60000,maxTotalMs:900000,...(callId?{callId}:{})});
+      if(!r.ok)throw Object.assign(new Error(r.message||'日K工作进程请求失败。'),{code:'DATA_SOURCE_ERROR'});
+      if(!Array.isArray(r.result)||r.result.length!==chunk.items.length||r.result.some((x,i)=>x?.symbol!==chunk.items[i].symbol))C().fail('WORKER_RESULT_INVALID','日K分析结果数量、顺序或证券身份不一致。');
+      out.push(...r.result);
+    }
+    return out;
   }
   const r=await cindy.node.request({method,params,timeoutMs:60000,maxTotalMs:900000,...(callId?{callId}:{} )});
   if(!r.ok) throw Object.assign(new Error(r.message || '行情服务请求失败。'),{code:'DATA_SOURCE_ERROR'});
