@@ -33,6 +33,41 @@ test('official source identity, metadata, dates, risk bounds and nonfuture valua
  assert.throws(()=>I.review(x,{fingerprint:x.fingerprint,reviewerId:'reader',verdict:'supported',checkedAt:iso},at),{code:'INVALID_INFORMATION'});
  x.contentLevel='metadata';assert.throws(()=>I.review(x,{fingerprint:x.fingerprint},at),{code:'INVALID_INFORMATION'});
 });
+test('NFRA exact official host is a risk primary source without trusting lookalikes or company disclosure categories',()=>{
+ const url='https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId=999999.json';
+ assert.equal(I.sourceUrl(url),url);assert.equal(I.primary(url,'risk'),true);
+ for(const host of ['www.nfra.gov.cn.evil.test','nfra.gov.cn','other.nfra.gov.cn']){
+  const bad=url.replace('www.nfra.gov.cn',host);assert.equal(I.primary(bad,'risk'),false);
+  assert.throws(()=>I.sourceUrl(bad),{code:'INVALID_INFORMATION'});
+ }
+ for(const bad of [url.replace('https:','http:'),url.replace('www.nfra.gov.cn','user@www.nfra.gov.cn'),url.replace('www.nfra.gov.cn','www.nfra.gov.cn:444')])assert.throws(()=>I.sourceUrl(bad),{code:'INVALID_INFORMATION'});
+ assert.equal(I.primary(url,'financial'),false);assert.equal(I.primary(url,'announcement'),false);
+ assert.throws(()=>I.evidence(e('financial',{url,reportPeriod:'2026-09-30'}),at),{code:'INVALID_INFORMATION'});
+});
+test('NFRA JSON body capture still requires matching fingerprints, two independent reviews and current risk scope',()=>{
+ const url='https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId=999999.json';
+ const scope={from:new Date(at-90*86400000).toISOString(),to:iso,urls:[url],limitations:'Synthetic regulator body; scoped only, no issuer-wide absence or trading-status claim.'};
+ const n=e('risk',{url,searchScope:scope}),r=I.evidence(n,at);r.id='synthetic-risk';r.fingerprint='synthetic-fingerprint';
+ assert.equal(I.status(r,at),'source_not_captured');r.sourceSnapshot={url,sha256:'a'.repeat(64),fetchedAt:at,bytes:100,contentType:'application/json'};
+ const vote=reviewerId=>({fingerprint:r.fingerprint,reviewerId,verdict:'supported',checkedAt:iso,sourceUrl:url,excerpt:'Synthetic official body was actually read.',notes:'Synthetic identity, period and scope checked; capture alone is not body verification.'});
+ r.reviews.push(I.review(r,vote('nfra-reader'),at));assert.equal(I.status(r,at),'needs_cross_review');
+ assert.throws(()=>I.review(r,vote('nfra-reader'),at),{code:'INVALID_INFORMATION'});
+ assert.throws(()=>I.review(r,{...vote('nfra-checker'),fingerprint:'different'},at),{code:'INVALID_INFORMATION'});
+ r.reviews.push(I.review(r,vote('nfra-checker'),at));assert.equal(I.status(r,at),'supported');
+ const x=full();x.news=x.news.filter(n=>n.category!=='risk').concat({...r,symbol:x.symbol});x.sourceSnapshots[url]=r.sourceSnapshot;
+ assert.equal(I.coverage(x).status,'supported');
+ const changed=structuredClone(x);changed.sourceSnapshots[url]={...changed.sourceSnapshots[url],sha256:'b'.repeat(64)};assert.equal(I.coverage(changed).checks.risk.status,'insufficient');
+ assert.equal(I.status({...r,contentLevel:'metadata'},at),'metadata_only');
+ assert.throws(()=>I.evidence({...n,searchScope:{...scope,to:new Date(at-86400001).toISOString()}},at),{code:'INVALID_INFORMATION'});
+ r.reviews[1].verdict='uncertain';assert.equal(I.coverage(x).checks.risk.status,'conflict');
+});
+test('read-only NFRA source capture does not configure an account or create research and report actions',async()=>{
+ const h=host(),before=(await h.call('get_state')).result;
+ const r=await h.call('stock_detail',{view:'source',url:'https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId=999999.json'});
+ assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.result.saved,false);
+ const after=(await h.call('get_state')).result;
+ for(const key of ['revision','config','activePlan','latestPlan','latestRun','reports','pendingActions','paperAccounts'])assert.deepEqual(after[key],before[key]);
+});
 test('financial parser preserves units and nulls, separates field definitions, rejects future and wrong-company data',()=>{
  const raw=JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname,'fixtures/financial-sh600519-eastmoney-20261105.json'),'utf8'));
  const rows=N.financialRows(raw,'sh600519',at);assert.equal(rows[0].metrics.basicEps.value,51.53);assert.equal(rows[0].metrics.parentNetProfit.unit,'CNY');

@@ -1,11 +1,11 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AShareInformation=api;})(globalThis,function(){
 'use strict';
-const SOURCE_HOSTS=['www.cninfo.com.cn','datacenter.eastmoney.com','static.cninfo.com.cn','www.gov.cn','sousuo.www.gov.cn','www.ndrc.gov.cn','zfxxgk.ndrc.gov.cn','www.miit.gov.cn','www.pbc.gov.cn','www.stats.gov.cn','www.csrc.gov.cn','www.sse.com.cn','query.sse.com.cn','www.szse.cn','www.bse.cn','quote.eastmoney.com','qt.gtimg.cn'];
+const SOURCE_HOSTS=['www.cninfo.com.cn','datacenter.eastmoney.com','static.cninfo.com.cn','www.gov.cn','sousuo.www.gov.cn','www.ndrc.gov.cn','zfxxgk.ndrc.gov.cn','www.miit.gov.cn','www.pbc.gov.cn','www.stats.gov.cn','www.csrc.gov.cn','www.nfra.gov.cn','www.sse.com.cn','query.sse.com.cn','www.szse.cn','www.bse.cn','quote.eastmoney.com','qt.gtimg.cn'];
 const DAY=86400000,CATEGORIES=['policy','announcement','financial','valuation','risk'];
 const LABELS={policy:'行业政策',announcement:'公司公告',financial:'财报',valuation:'估值口径',risk:'风险事件'};
 function fail(message){throw Object.assign(new Error(message),{code:'INVALID_INFORMATION'});}
 function publicUrl(s){let u;try{u=new URL(s);}catch{fail('证据来源须为公开HTTPS原文。');}if(u.protocol!=='https:'||u.username||u.password||u.port||u.hostname==='localhost'||/^\d[\d.]+$/.test(u.hostname)||u.hostname.includes(':'))fail('证据来源须为公开HTTPS原文。');return u;}
-function primary(s,category){const h=publicUrl(s).hostname.toLowerCase();if(category==='risk'&&h==='query.sse.com.cn')return false;if(category==='risk'&&(h==='csrc.gov.cn'||h.endsWith('.csrc.gov.cn')))return true;if(category==='policy')return h==='gov.cn'||h.endsWith('.gov.cn');return ['cninfo.com.cn','sse.com.cn','szse.cn','bse.cn'].some(d=>h===d||h.endsWith('.'+d));}
+function primary(s,category){const h=publicUrl(s).hostname.toLowerCase();if(category==='risk'&&h==='query.sse.com.cn')return false;if(category==='risk'&&(h==='csrc.gov.cn'||h.endsWith('.csrc.gov.cn')||h==='www.nfra.gov.cn'))return true;if(category==='policy')return h==='gov.cn'||h.endsWith('.gov.cn');return ['cninfo.com.cn','sse.com.cn','szse.cn','bse.cn'].some(d=>h===d||h.endsWith('.'+d));}
 function date(s,name){if(typeof s!=='string'||!/(?:Z|[+-]\d{2}:\d{2})$/.test(s)||!Number.isFinite(Date.parse(s)))fail(name+'须含时区。');return Date.parse(s);}
 function period(s){if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s)||new Date(s+'T00:00:00Z').toISOString().slice(0,10)!==s)fail('财报期末须为有效YYYY-MM-DD。');return s;}
 function clean(s,max=1200){if(typeof s!=='string'||!s.trim()||s.length>max)fail('资讯字段缺失或过长。');return s.trim();}
