@@ -17,7 +17,7 @@ function fixture({fastStatus=200,searchStatus=200,list=[item],searchBody,timeout
   });return req;
  }};
  const module={exports:{}};
- vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../plugin/node/market.cjs'),'utf8'),{module,exports:module.exports,require:n=>n==='../clist.js'?require('../plugin/clist.js'):n==='./network.cjs'?require('./helpers/network-fixture.cjs')(https):n==='node:https'?https:n==='../core.js'?core:require(n),Date,Buffer,URL,URLSearchParams,TextDecoder});
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../plugin/node/market.cjs'),'utf8'),{module,exports:module.exports,require:n=>n==='../clist.js'?require('../plugin/clist.js'):n==='../kline.js'?require('../plugin/kline.js'):n==='./network.cjs'?require('./helpers/network-fixture.cjs')(https):n==='node:https'?https:n==='../core.js'?core:require(n),Date,Buffer,URL,URLSearchParams,TextDecoder});
  return {market:module.exports,requests};
 }
 test('specialized search returns dated article metadata and source-specific headers',async()=>{

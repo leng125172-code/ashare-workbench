@@ -1,6 +1,6 @@
 'use strict';
 // One browser-logic writer owns every durable mutation; UI never overwrites the store.
-const modules=import('./core.js').then(()=>import('./clist.js')).then(()=>import('./calendar.js')).then(()=>import('./simulation.js')).then(()=>import('./chart.js')).then(()=>import('./paper.js')).then(()=>import('./information.js').then(()=>import('./regulatory.js')).then(()=>import('./incremental.js'))).then(()=>import('./execution.js')).then(()=>import('./forward.js')).then(()=>import('./matching.js')).then(()=>import('./history.js')).then(()=>import('./performance.js')).then(()=>import('./storage.js')).then(()=>import('./repository.js')).then(()=>import('./history-reset.js'));
+const modules=import('./core.js').then(()=>import('./clist.js')).then(()=>import('./kline.js')).then(()=>import('./calendar.js')).then(()=>import('./simulation.js')).then(()=>import('./chart.js')).then(()=>import('./paper.js')).then(()=>import('./information.js').then(()=>import('./regulatory.js')).then(()=>import('./incremental.js'))).then(()=>import('./execution.js')).then(()=>import('./forward.js')).then(()=>import('./matching.js')).then(()=>import('./history.js')).then(()=>import('./performance.js')).then(()=>import('./storage.js')).then(()=>import('./repository.js')).then(()=>import('./history-reset.js'));
 let selectedMode='live';
 const stores={},storageMeta={},forceStorageModes=new Set(),forceRepositoryModes=new Set(),repositoryModes=new Set(),repositoryBackups={},repositories={},stateRootHashes={};
 function repository(mode=selectedMode){return repositories[mode]||(repositories[mode]=globalThis.AShareRepository.create({request:request=>rawLibrary(mode,request),progress:progress=>{if(liveCall&&Date.now()-(repositoryProgressAt||0)>5000){repositoryProgressAt=Date.now();cindy.send({type:'tool-progress',callId:liveCall,message:'独立快照与引用写入 '+progress.done+'/'+progress.total});}}}));}
@@ -60,10 +60,24 @@ function freshDailyBar(stock,at=Date.now()){const last=stock?.klineAsOf||stock?.
 function informationCoverage(r,symbol,sectorId,quote){return I().coverage({news:r.news,dossier:r.dossiers?.[symbol],symbol,sectorId,sourceSnapshots:r.sourceSnapshots||{},quote:quote||r.dossiers?.[symbol]?.valuationReference});}
 const id=p=>(selectedMode==='simulation'?'sim-':'')+p+'-'+crypto.randomUUID().slice(0,12);
 const clone=o=>JSON.parse(JSON.stringify(o));
-let hostClistCapability;
+let hostClistCapability,hostKlineCapability;
+async function hostKlineAvailable(callId){
+ if(!cindy.fetch||!globalThis.AShareKline)return false;
+ if(hostKlineCapability===undefined){try{const h=await cindy.node.request({method:'health',params:{},timeoutMs:10000,...(callId?{callId}:{})});hostKlineCapability=h.ok&&h.result?.capabilities?.includes('host_kline_transport')===true;}catch{hostKlineCapability=false;}}
+ return hostKlineCapability;
+}
+async function hostKlineSnapshot(symbol,callId){
+ const K=globalThis.AShareKline,url=K.url(symbol),r=await cindy.fetch({url,method:'GET',as:'text',timeoutMs:9000,headers:{'User-Agent':'Mozilla/5.0 Cindy-AShare/1.0',Accept:'application/json,text/plain,*/*',Referer:'https://finance.eastmoney.com/'},...(callId?{callId}:{})});
+ if(!r.ok||r.status!==200){const code=typeof r.errorCode==='string'&&/^[A-Z0-9_]+$/.test(r.errorCode)?r.errorCode:Number.isInteger(r.status)?String(r.status):'NETWORK';throw Object.assign(new Error('宿主日K请求失败：'+code),{code:'DATA_SOURCE_ERROR',sourceCode:code,sourceStage:'host-request'});}
+ if(r.truncated||typeof r.body!=='string'||new TextEncoder().encode(r.body).byteLength>K.MAX_BYTES)C().fail('DATA_SIZE_LIMIT','宿主日K正文不完整或超限。');
+ let data;try{data=JSON.parse(r.body);}catch{C().fail('KLINE_SOURCE_INVALID','宿主日K返回非JSON。');}
+ const fetchedAt=Date.now();K.parse(data,symbol,{fetchedAt});
+ return {url,body:r.body,sha256:await signatureHash(r.body),fetchedAt,hashBasis:'utf8-decoded-response',transport:'host-text',finalUrlExposed:false};
+}
 async function rpc(method,params={},callId) {
   await modules;
   if(selectedMode==='simulation')return globalThis.AShareSimulation.request(method,params);
+  if(method==='assess'&&Array.isArray(params.items)&&!params.items.length)return [];
   if(['sectors','members'].includes(method)&&cindy.fetch&&globalThis.AShareClist){
     if(hostClistCapability===undefined){
       try{const h=await cindy.node.request({method:'health',params:{},timeoutMs:10000,...(callId?{callId}:{})});hostClistCapability=h.ok&&h.result?.capabilities?.includes('host_clist_transport')===true;}catch{hostClistCapability=false;}
@@ -78,6 +92,16 @@ async function rpc(method,params={},callId) {
       }});
       const data=await (method==='sectors'?client.sectors():client.members(params.sectorId));return {...data,sourceProvenance:{transport:'host-text',initialHost:'push2.eastmoney.com',redirectValidation:'host-enforced-https-ssrf-redirect-policy',finalUrlExposed:false,pages:receipts},warnings:[...data.warnings,'宿主文本通道已执行HTTPS/重定向守门；未返回最终URL，指纹针对解码文本，不冒充原始传输字节或最终主机证明。']};
     }
+  }
+  if((method==='kline'&&(params.period||'day')==='day'||method==='assess')&&await hostKlineAvailable(callId)){
+    if(method==='kline'){
+      const raw=await hostKlineSnapshot(C().symbol(params.symbol),callId),K=globalThis.AShareKline;
+      return K.parse(JSON.parse(raw.body),C().symbol(params.symbol),{fetchedAt:raw.fetchedAt,sourceProvenance:{transport:raw.transport,initialHost:'push2his.eastmoney.com',url:raw.url,sha256:raw.sha256,hashBasis:raw.hashBasis,finalUrlExposed:false}});
+    }
+    if(!Array.isArray(params.items)||!params.items.length||params.items.length>8)C().fail('INVALID_BATCH','宿主日K分析一次仅支持1至8只股票。');
+    const symbols=[...new Set(params.items.map(x=>C().symbol(x.symbol)))],hostKlines={};
+    for(let start=0;start<symbols.length;start+=2)await Promise.all(symbols.slice(start,start+2).map(async symbol=>{try{hostKlines[symbol]=await hostKlineSnapshot(symbol,callId);}catch(e){const code=typeof e.code==='string'&&/^[A-Z0-9_]+$/.test(e.code)?e.code:'DATA_SOURCE_ERROR',sourceCode=typeof e.sourceCode==='string'&&/^[A-Z0-9_]+$/.test(e.sourceCode)?e.sourceCode:code;hostKlines[symbol]={errorCode:code,sourceCode,sourceStage:e.sourceStage==='host-request'?'host-request':'host-read-or-parse',message:'宿主日K未取得：'+sourceCode};}}));
+    params={...params,hostKlines};
   }
   const r=await cindy.node.request({method,params,timeoutMs:60000,maxTotalMs:900000,...(callId?{callId}:{} )});
   if(!r.ok) throw Object.assign(new Error(r.message || '行情服务请求失败。'),{code:'DATA_SOURCE_ERROR'});
@@ -213,7 +237,7 @@ async function stockData(a,callId){
   const context=selectedMode==='simulation'?{scenario:a.scenario,asOf:a.asOf}:{};
   const [k,q,n]=await Promise.all([rpc('kline',{symbol:a.symbol,period:a.period||'day',...context},callId),rpc('quotes',{symbols:[a.symbol],...context},callId),rpc('news',{keyword:a.keyword||a.symbol.slice(-6),...context},callId)]);
   const dossier=selectedMode==='live'&&a.includeInformation!==false?await rpc('information',{symbol:a.symbol},callId):null;
-  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:a.period&&a.period!=='day'?null:C().indicators(k.bars),news:n.rows,newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null,warnings:[...k.warnings,...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
+  return {...k,researchNotice:'单股资料查询及技术指标不等于投资候选，更不代表可买；停复牌须核对官方公告。',information:dossier,informationSources:dossier?I().sources:[],quote:q[C().symbol(a.symbol)]||null,indicators:a.period&&a.period!=='day'?null:globalThis.AShareKline.indicators(k.bars,C()),news:n.rows,newsCoverage:n.coverage||null,newsDiagnostics:n.diagnostics||null,warnings:[...k.warnings,...n.warnings,...(dossier?.warnings||[]),...(!C().quoteValid(q[C().symbol(a.symbol)],Date.now(),20)?['未取得有效实时报价；如展示旧价格，仅作带日期参考，停复牌状态须另核官方公告。']:[])]};
 }
 function enqueueImages(d,report,plan,config){
   if(!plan||config?.sendKlineImages===false)return;

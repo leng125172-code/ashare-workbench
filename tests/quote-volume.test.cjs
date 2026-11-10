@@ -32,6 +32,8 @@ function market(body) {
     module, exports:module.exports, Buffer, URL, URLSearchParams, TextDecoder, Date,
     require(name) {
       if (name === '../clist.js') return require('../plugin/clist.js');
+      if (name === '../kline.js') return require('../plugin/kline.js');
+      if (name === 'node:crypto') return require('node:crypto');
       if (name === './network.cjs') return require('./helpers/network-fixture.cjs')(https);
       if (name === 'node:https') return https;
       if (name === '../core.js') return core;

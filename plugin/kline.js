@@ -1,0 +1,27 @@
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AShareKline=api;})(globalThis,function(){
+'use strict';
+const MAX_BYTES=256*1024,MAX_BARS=140;
+function fail(message){throw Object.assign(new Error(message),{code:'KLINE_SOURCE_INVALID'});}
+function symbol(s){if(typeof s!=='string'||!/^(sh|sz|bj)\d{6}$/.test(s))fail('日K证券代码无效。');return s;}
+function url(code){const s=symbol(code),p=new URLSearchParams({secid:(s.startsWith('sh')?'1.':'0.')+s.slice(2),fields1:'f1,f2,f3,f4,f5,f6',fields2:'f51,f52,f53,f54,f55,f56,f57',klt:'101',fqt:'1',end:'20500101',lmt:String(MAX_BARS)});return 'https://push2his.eastmoney.com/api/qt/stock/kline/get?'+p;}
+function value(v){if(typeof v!=='string'||!v.trim()||!Number.isFinite(Number(v)))fail('日K数值缺失或格式无效。');return Number(v);}
+function parse(data,code,{fetchedAt=Date.now(),sourceProvenance}={}){
+ const s=symbol(code),today=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+ if(data?.rc!==0||data.data?.code!==s.slice(2)||data.data?.market!==(s.startsWith('sh')?1:0)||!Array.isArray(data.data.klines)||!data.data.klines.length||data.data.klines.length>MAX_BARS)fail('日K身份、市场、条数或响应状态不一致。');
+ if(!Number.isFinite(fetchedAt)||fetchedAt>Date.now()+60000||Date.now()-fetchedAt>86400000)fail('日K抓取时间无效或超过24小时。');
+ let last='';const bars=data.data.klines.map(row=>{
+  if(typeof row!=='string')fail('日K行格式无效。');const a=row.split(',');
+  if(a.length!==7||!/^\d{4}-\d{2}-\d{2}$/.test(a[0])||!Number.isFinite(Date.parse(a[0]+'T00:00:00Z'))||new Date(a[0]+'T00:00:00Z').toISOString().slice(0,10)!==a[0]||a[0]<=last||a[0]>today)fail('日K日期无效、重复、乱序或属于未来。');
+  last=a[0];const [open,close,high,low,volume,amount]=a.slice(1).map(value);
+  if(high<Math.max(open,close)||low>Math.min(open,close)||volume<0||amount<0)fail('日K价格或量额范围无效。');
+  return {date:a[0],open,close,high,low,volume,amount};
+ });
+ return {source:'eastmoney',adjustment:'qfq',period:'day',fetchedAt,bars,warnings:sourceProvenance?.transport==='host-text'?['日K经宿主正式HTTPS通道取得；指纹针对解码文本，未返回最终URL；不冒充原始传输字节或最终主机证明。']:[],...(sourceProvenance?{sourceProvenance}:{})};
+}
+function indicators(bars,core){
+ const result=core.indicators(bars),last=bars.at(-1);
+ if(!last||!['open','close','high','low'].every(k=>Number.isFinite(last[k])&&last[k]>0)||result.ready&&result.asOf!==last.date)return {ready:false,count:result.count,asOf:result.asOf||null,reason:'最新日K无可用正价格，或指标日期与原始末条不一致；不得以较旧指标冒充最新。'};
+ return result;
+}
+return {MAX_BYTES,MAX_BARS,url,parse,indicators};
+});

@@ -23,9 +23,9 @@ const methods={
   regulatory_page:p=>regulatory.page(p),
   sectors:()=>M.sectors(), members:p=>M.members(p.sectorId), quotes:p=>M.quotes(p.symbols || []),
   kline:p=>M.kline(p.symbol,p.period), news:p=>M.news(p.keyword), information:p=>information.dossier(p.symbol), information_source:p=>information.source(p.url),execution:p=>execution.snapshot(p.symbol),instrument:p=>information.instrument(p.symbol),
-  assess:p=>M.assess(p.items || [],(done,total)=>reply({jsonrpc:'2.0',method:'progress',params:{done,total}})),
+  assess:p=>M.assess(p.items || [],(done,total)=>reply({jsonrpc:'2.0',method:'progress',params:{done,total}}),p.hostKlines),
   sync_monitor:p=>{monitor={plan:p.plan || null,config:p.config || null}; return {listening:!!monitor.plan,intervalSeconds:60};},
-  health:()=>({runtime:process.version,advisoryOnly:true,capabilities:['industry','members','quotes','qfq_kline','indicators','news','local_monitor','host_clist_transport'],network:require('./network.cjs').diagnostics()})
+  health:()=>({runtime:process.version,advisoryOnly:true,capabilities:['industry','members','quotes','qfq_kline','indicators','news','local_monitor','host_clist_transport','host_kline_transport'],network:require('./network.cjs').diagnostics()})
 };
 readline.createInterface({input:process.stdin}).on('line',async line=>{
   let r;

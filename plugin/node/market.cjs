@@ -1,6 +1,8 @@
 'use strict';
 const network = require('./network.cjs');
 const C = require('../core.js');
+const K = require('../kline.js');
+const crypto = require('node:crypto');
 const ALLOWED = new Set(['push2.eastmoney.com','push2his.eastmoney.com','qt.gtimg.cn','ifzq.gtimg.cn','zhibo.sina.com.cn','np-listapi.eastmoney.com','search-api-web.eastmoney.com']);
 const text = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 function get(url, gbk = false) {
@@ -43,11 +45,13 @@ async function kline(code, period = 'day') {
   const secid = (s.startsWith('sh') ? '1.' : '0.')+s.slice(2);
   const p = new URLSearchParams({ secid, fields1:'f1,f2,f3,f4,f5,f6', fields2:'f51,f52,f53,f54,f55,f56,f57', klt:String(cycle), fqt:'1', end:'20500101', lmt:'140' });
   try {
-    const d = await json('https://push2his.eastmoney.com/api/qt/stock/kline/get?'+p);
+    const d = await json(period==='day'?K.url(s):'https://push2his.eastmoney.com/api/qt/stock/kline/get?'+p);
     if (d.rc !== 0 || !Array.isArray(d.data?.klines)) throw new Error('缺少K线数据。');
+    if(period==='day')return K.parse(d,s);
     return { source:'eastmoney', adjustment:'qfq', period, fetchedAt:Date.now(), bars:d.data.klines.map(v => { const a = v.split(','); return { date:a[0], open:Number(a[1]), close:Number(a[2]), high:Number(a[3]), low:Number(a[4]), volume:Number(a[5]), amount:Number(a[6]) }; }), warnings:[] };
   } catch (first) {
-    const d = await json('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+s+','+period+',,,140,qfq');
+    if(first.code==='KLINE_SOURCE_INVALID')throw first;
+    let d;try{d=await json('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+s+','+period+',,,140,qfq');}catch(last){last.sourceFailures=[{source:'eastmoney',code:first.code||'DATA_SOURCE_ERROR',statusCode:first.statusCode||null},{source:'tencent',code:last.code||'DATA_SOURCE_ERROR',statusCode:last.statusCode||null}];throw last;}
     const adjusted = d.data?.[s]?.['qfq'+period];
     const rows = Array.isArray(adjusted) ? adjusted : d.data?.[s]?.[period];
     if (!Array.isArray(rows)) throw new Error('主备K线源均未返回有效数据。');
@@ -108,7 +112,16 @@ async function news(keyword) {
   if(query)warnings.push('专项结果仅为全文关键词检索元数据，包含字面同名或代码误匹配的可能；须逐条核对公司/行业关联及原文，不替代五类证据互核。');
   return {rows:[...new Map(rows.filter(n=>n.title).map(n=>[n.id,n])).values()].sort((a,b)=>(b.publishedMs||0)-(a.publishedMs||0)),warnings,fetchedAt:Date.now(),coverage,diagnostics:{sources,search:searchMeta}};
 }
-async function assess(items, progress = ()=>{}) {
+function hostKline(snapshot,symbol){
+  if(!snapshot||typeof snapshot!=='object')throw Object.assign(new Error('宿主日K快照缺失。'),{code:'KLINE_SOURCE_INVALID'});
+  if(snapshot.errorCode)throw Object.assign(new Error(String(snapshot.message||'宿主日K未取得').slice(0,180)),{code:snapshot.errorCode,sourceCode:snapshot.sourceCode,sourceStage:snapshot.sourceStage});
+  if(snapshot.url!==K.url(symbol)||snapshot.transport!=='host-text'||snapshot.hashBasis!=='utf8-decoded-response'||snapshot.finalUrlExposed!==false||!Number.isFinite(snapshot.fetchedAt)||typeof snapshot.body!=='string'||Buffer.byteLength(snapshot.body)>K.MAX_BYTES||!snapshot.body.length||!/^[a-f0-9]{64}$/.test(snapshot.sha256||'')||crypto.createHash('sha256').update(snapshot.body).digest('hex')!==snapshot.sha256)throw Object.assign(new Error('宿主日K来源、内容范围或指纹不一致。'),{code:'KLINE_SOURCE_INVALID'});
+  let data;try{data=JSON.parse(snapshot.body);}catch{throw Object.assign(new Error('宿主日K不是JSON。'),{code:'KLINE_SOURCE_INVALID'});}
+  const result=K.parse(data,symbol,{fetchedAt:snapshot.fetchedAt,sourceProvenance:{transport:'host-text',initialHost:'push2his.eastmoney.com',url:snapshot.url,sha256:snapshot.sha256,hashBasis:snapshot.hashBasis,finalUrlExposed:false}});
+  return result;
+}
+async function assess(items, progress = ()=>{}, hostKlines) {
+  if(hostKlines!==undefined&&(!hostKlines||typeof hostKlines!=='object'||Array.isArray(hostKlines)||!items.length||items.length>8||Object.keys(hostKlines).length!==new Set(items.map(x=>x.symbol)).size||Object.keys(hostKlines).some(s=>!items.some(x=>x.symbol===s))))throw Object.assign(new Error('宿主日K批次或证券范围无效。'),{code:'KLINE_SOURCE_INVALID'});
   const missing=items.filter(x=>!C.quoteValid(x.quote,Date.now(),20));
   let backup={},backupError=null;
   if(missing.length){try{backup=await quotes(missing.map(x=>x.symbol));}catch(e){backupError=String(e.message||e).slice(0,180);}}
@@ -122,10 +135,10 @@ async function assess(items, progress = ()=>{}) {
       if(valid){s.quote=q;s.warnings.push('行业列表缺报价，已通过备用源取得带实际时点的有效报价；不等于交易状态已核实。');}
       else{if(q&&C.finite(q.price)&&q.price>0&&Number.isFinite(q.asOf)&&(!Number.isFinite(s.lastKnownQuote?.asOf)||q.asOf>s.lastKnownQuote.asOf))s.lastKnownQuote={...q,usage:'dated_reference_only'};s.warnings.push('缺少有效报价：'+s.quoteDiagnostics.reason+'；停复牌状态需官方公告核验，旧价格仅作带日期参考。');}
     }
-    try { const k = await kline(item.symbol); s.indicators = C.indicators(k.bars); s.klineSource=k.source; s.adjustment=k.adjustment; s.klineAsOf=k.bars.at(-1)?.date; s.warnings.push(...k.warnings); }
-    catch { s.indicators={ready:false,count:0}; s.warnings.push('K线主备源不可用，未分档。'); }
+    try { const k = hostKlines===undefined?await kline(item.symbol):hostKline(hostKlines[item.symbol],item.symbol); s.indicators = K.indicators(k.bars,C); s.klineSource=k.source; s.adjustment=k.adjustment; s.klineAsOf=k.bars.at(-1)?.date;if(k.sourceProvenance)s.klineSourceProvenance=k.sourceProvenance; s.warnings.push(...k.warnings); }
+    catch(e) { s.indicators={ready:false,count:0};s.klineDiagnostics={state:'unavailable',transport:hostKlines===undefined?'node':'host-text',code:e.code||'DATA_SOURCE_ERROR',...(e.sourceCode?{sourceCode:e.sourceCode,stage:e.sourceStage}:{}),...(e.sourceFailures?{sources:e.sourceFailures}:{})}; s.warnings.push('K线来源不可用，未分档：'+s.klineDiagnostics.code+'。'); }
     out.push(s); progress(out.length,items.length);
   }
   return out;
 }
-module.exports = { get, json, timeCN, row, list, sectors, members, quotes, kline, news, assess };
+module.exports = { get, json, timeCN, row, list, sectors, members, quotes, kline, news, assess, hostKline };

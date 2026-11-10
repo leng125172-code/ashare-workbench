@@ -259,3 +259,12 @@ plan_control(action:performance_match,mode,requestKey,performance:{ledgerId,expe
 先stock_detail(view:information, runId, symbol)保存同公司资料包，读取announcements.rows的具体原文URL及publishedAt；stock_detail(view:source)保存同URL原文字节指纹。add_evidence的announcement/full_text_reviewed可带tradingEvent:{state:suspended或resumed,effectiveDate:YYYY-MM-DD,basis:正文依据}，发布时间与官方列表须精确一致。不能使用目录页或另一公司的PDF。随后真实独立代理按证据fingerprint进行双人正文互核；事件不代替其余四类证据。
 
 停牌及未知/冲突状态为观察对象，阻止正权重配置；不自动改动账户和原有计划。同模式跨轮/重启继承原证据、指纹、时间与全部复核，不续期，不因报价恢复或证据过期移除。相同生效日/发布时间的相反事件须继续核验。复牌事件须有效且双核验，重新分派分析的recordedAt及最终报价asOf均晚于复核边界；旧判断不自动恢复。每日扫描继承已知事件并提示复查，不自动交易；历史报告保留原冻结结论。
+
+
+## 0.18.9 日K宿主通道与失败边界
+
+worker明确声明host_kline_transport能力且宿主fetch可用时，日K详情与内部行业/候选assess共用原有东方财富push2his固定HTTPS接口和前复权参数，通过宿主正常网络通道读取。仍按证券市场/代码、ISO日期、顺序/唯一性、有限数值、OHLC关系、非负量额及1—140条校验；前复权历史可能非正，不把该历史调整值当实际委托价。历史值保留；若末条价格不能用于指标或指标实际日期与末条不一致，指标保持未就绪，不用较旧指标通过最新日K门禁。周/月K保持原路径。旧worker缺能力时保留原有Node路径，不猜版本启用。源拒绝或格式/身份异常不在通道间轮换绕过。
+
+单响应至多256KiB，内部批次1—8股、最多2个并行请求；主线程只把自己实际取得的固定URL响应与UTF-8解码文本SHA传给自身worker。worker再核URL、代码/市场、文本指纹及抓取时间，不接受公开工具传任意bars/URL/headers。宿主未暴露最终URL时保留该限制，不把文本SHA冒称原始传输字节。来源失败按源/阶段/错误码保留，和停复牌事实分开；缺日K不分档，不因有历史报价推断停牌。
+
+报价20分钟规则和lastKnownQuote语义不变：闭市重读旧报价只保留实际时点参考，不改成现价。最近完整交易日日K、五类正文双人互核、风险和最终全行业复核门禁仍适用。升级不补写历史快照或旧判断。当前未决操作先对账；确认没有提交后，才可用原键原参数实际刷新已采集候选，并按新行业token重新分析，不恢复旧日研究。

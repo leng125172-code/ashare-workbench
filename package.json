@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-ashare-workbench",
-  "version": "0.18.8",
+  "version": "0.18.9",
   "description": "A股投研：成交额前120/手动倾向行业、网络代理环境兼容与诊断、专项资讯检索与覆盖诊断、K线、证据互核、行业四组/股票三档与计划。Cindy/DSH独立存储，仅建议，无自动交易。",
   "license": "MIT",
   "type": "commonjs",

@@ -62,11 +62,11 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
   fs:async r=>{assert.equal(r.root,'workdir');assert.ok(r.callId);exported.set(r.path,r.content);return {ok:true,bytes:Buffer.byteLength(r.content)};},
   send:async r=>{if(r.type==='routine-request'&&r.action==='publish'){published.push(r.event);if(failEvents)return {ok:false,errorCode:'FIXTURE_OFFLINE'};}if(r.type==='tool-result'){results.get(r.callId)(r);results.delete(r.callId);}return {ok:true,accepted:0,duplicate:false};},
   node:{request:async r=>{const p=r.params;let result;
-   switch(r.method){case'health':result={capabilities:options.hostClist?['host_clist_transport']:[]};break;case'sync_monitor':monitor.push(p);result={listening:!!p.plan};break;
+   switch(r.method){case'health':result={capabilities:[...(options.hostClist?['host_clist_transport']:[]),...(options.hostKline?['host_kline_transport']:[])]};break;case'sync_monitor':monitor.push(p);result={listening:!!p.plan};break;
    case'sectors':result={rows:(options.sectors||[{id:'BK0001',name:'行业A',changePct:1}]).map((s,i)=>({amount:(10000-i)*1000000,...s})),total:(options.sectors||[1]).length,complete:true,warnings:[]};break;
    case'news':result={rows:[{id:'n1',title:'本轮真实测试资讯',source:'fixture',url:'https://example.com/news',publishedMs:now,publishedAt:new Date(now).toISOString(),keyword:p.keyword}],warnings:[]};break;
-   case'members':result={rows:items,total:3,complete:true,warnings:[],fetchedAt:now};break;
-   case'assess':result=p.items.map(s=>({...s,indicators:C.indicators(options.bars||bars),klineAsOf:(options.bars||bars).at(-1)?.date,adjustment:'qfq',klineSource:'fixture'}));break;
+   case'members':result={rows:items,total:items.length,complete:true,warnings:[],fetchedAt:now};break;
+   case'assess':options.assessCalls?.push(p);result=p.items.map(s=>{if(p.hostKlines!==undefined){try{const k=require('../../plugin/node/market.cjs').hostKline(p.hostKlines[s.symbol],s.symbol);return {...s,indicators:require('../../plugin/kline.js').indicators(k.bars,C),klineAsOf:k.bars.at(-1)?.date,adjustment:k.adjustment,klineSource:k.source,klineSourceProvenance:k.sourceProvenance};}catch(e){return {...s,indicators:{ready:false,count:0},klineDiagnostics:{code:e.code}};}}return {...s,indicators:C.indicators(options.bars||bars),klineAsOf:(options.bars||bars).at(-1)?.date,adjustment:'qfq',klineSource:'fixture'};});break;
    case'kline':result={source:'offline-fixture',adjustment:'qfq',period:'day',warnings:[],bars};break;
    case'information_source':if(options.failInformationSource)throw new Error('fixture-direct-offline');result={url:p.url,fetchedAt:Date.now(),sha256:options.sourceDigest||'a'.repeat(64),bytes:100,contentType:'application/pdf',isPdf:true,notice:'离线指纹样例'};break;
    case'information':result={symbol:p.symbol,fetchedAt:Date.now(),announcements:{status:'available',complete:true,total:1,rows:options.announcementRows||[]},financials:{status:'available',rows:[{reportPeriod:'2026-09-30',noticeDate:'2026-10-31'}]},warnings:['离线资料包样例，不是真实公司证据。']};break;
@@ -79,7 +79,7 @@ function host(files=new Map(),unavailable=false,failEvents=false,options={}){
  };
  class ClockDate extends Date{constructor(...args){super(...(args.length?args:[options.now()]));}static now(){return options.now();}}
  const context=vm.createContext({Date:options.now?ClockDate:Date,cindy,crypto,TextEncoder,TextDecoder,URL,URLSearchParams,console,btoa,atob,ReadableStream,CompressionStream,DecompressionStream,BroadcastChannel:class{postMessage(){}},setTimeout,clearTimeout,globalThis:null});context.globalThis=context;
- for(const name of ['core.js','clist.js','calendar.js','simulation.js','chart.js','paper.js','information.js','regulatory.js','incremental.js','execution.js','forward.js','matching.js','history.js','performance.js','storage.js','repository.js','history-reset.js']){const file=path.join(root,name);if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,'utf8'),context);}
+ for(const name of ['core.js','clist.js','kline.js','calendar.js','simulation.js','chart.js','paper.js','information.js','regulatory.js','incremental.js','execution.js','forward.js','matching.js','history.js','performance.js','storage.js','repository.js','history-reset.js']){const file=path.join(root,name);if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,'utf8'),context);}
  const main=fs.readFileSync(path.join(root,'main.js'),'utf8').replace(/import\('[^']+'\)/g,'Promise.resolve()');
  vm.runInContext(main,context);
  async function call(tool,args={}){const callId=crypto.randomUUID();const reply=await new Promise(resolve=>{results.set(callId,resolve);listener({type:'tool-call',tool,args,callId});});return JSON.parse(JSON.stringify(reply));}
